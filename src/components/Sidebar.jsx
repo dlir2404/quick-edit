@@ -1,0 +1,562 @@
+import React, { useState } from 'react';
+import {
+  Upload,
+  Crop as CropIcon,
+  Type,
+  Sliders,
+  Plus,
+  Trash2,
+  Eye,
+  EyeOff,
+  Film,
+  Volume2,
+  Sparkles,
+  X,
+  Link as LinkIcon,
+  Loader2,
+} from 'lucide-react';
+
+export function Sidebar({
+  activeTab,
+  setActiveTab,
+  isDrawerOpen,
+  setIsDrawerOpen,
+  videoData,
+  onFileSelect,
+  onLoadSample,
+  crop,
+  setCrop,
+  textLayers,
+  selectedTextId,
+  setSelectedTextId,
+  onAddText,
+  onUpdateText,
+  onDeleteText,
+  playbackSpeed,
+  setPlaybackSpeed,
+  volume,
+  setVolume,
+  onTikTokSubmit,
+  isTikTokLoading,
+}) {
+  const [tiktokInput, setTiktokInput] = useState('');
+
+  const CROP_PRESETS = [
+    { name: 'Gốc', ratio: 'Full', w: 100, h: 100 },
+    { name: '16:9', ratio: 'Ngang', w: 100, h: 56.25 },
+    { name: '9:16', ratio: 'TikTok', w: 56.25, h: 100 },
+    { name: '1:1', ratio: 'Vuông', w: 100, h: 100 },
+    { name: '4:5', ratio: 'Insta', w: 80, h: 100 },
+  ];
+
+  const applyCropPreset = (preset) => {
+    let w = preset.w;
+    let h = preset.h;
+    let x = (100 - w) / 2;
+    let y = (100 - h) / 2;
+
+    if (x < 0) {
+      h = (100 * 100) / preset.w;
+      w = 100;
+      x = 0;
+      y = (100 - h) / 2;
+    }
+
+    setCrop({
+      x: Math.max(0, Math.min(100 - w, Math.round(x))),
+      y: Math.max(0, Math.min(100 - h, Math.round(y))),
+      width: Math.round(w),
+      height: Math.round(h),
+      presetName: preset.name,
+    });
+  };
+
+  const handleToolClick = (tabKey) => {
+    if (activeTab === tabKey && isDrawerOpen) {
+      setIsDrawerOpen(false);
+    } else {
+      setActiveTab(tabKey);
+      setIsDrawerOpen(true);
+    }
+  };
+
+  const handleTikTokFormSubmit = (e) => {
+    e.preventDefault();
+    if (tiktokInput && onTikTokSubmit) {
+      onTikTokSubmit(tiktokInput);
+    }
+  };
+
+  const selectedTextLayer = textLayers.find((t) => t.id === selectedTextId);
+
+  return (
+    <>
+      {/* Vertical Icon Toolbar (56px) */}
+      <div className="vertical-icon-toolbar">
+        <button
+          className={`tool-icon-btn ${activeTab === 'video' && isDrawerOpen ? 'active' : ''}`}
+          onClick={() => handleToolClick('video')}
+          title="Nạp & Thông tin Media"
+        >
+          <Film size={18} />
+          <span>Media</span>
+        </button>
+
+        <button
+          className={`tool-icon-btn ${activeTab === 'text' && isDrawerOpen ? 'active' : ''}`}
+          onClick={() => handleToolClick('text')}
+          title="Chèn & Quản lý Text"
+        >
+          <Type size={18} />
+          <span>Text</span>
+        </button>
+
+        <button
+          className={`tool-icon-btn ${activeTab === 'crop' && isDrawerOpen ? 'active' : ''}`}
+          onClick={() => handleToolClick('crop')}
+          title="Cắt khung hình Crop"
+        >
+          <CropIcon size={18} />
+          <span>Crop</span>
+        </button>
+
+        <button
+          className={`tool-icon-btn ${activeTab === 'audio' && isDrawerOpen ? 'active' : ''}`}
+          onClick={() => handleToolClick('audio')}
+          title="Cấu hình Tốc độ & Âm thanh"
+        >
+          <Sliders size={18} />
+          <span>Cấu hình</span>
+        </button>
+      </div>
+
+      {/* Flyout Drawer Panel (320px) */}
+      {isDrawerOpen && (
+        <div className="tool-drawer-panel">
+          <div className="drawer-header">
+            <span>
+              {activeTab === 'video' && '📁 Nguồn Video'}
+              {activeTab === 'text' && `💬 Chèn Text (${textLayers.length})`}
+              {activeTab === 'crop' && '✂️ Cắt Khung Hình (Crop)'}
+              {activeTab === 'audio' && '⚙️ Âm Thanh & Tốc Độ'}
+            </span>
+            <button
+              className="btn btn-secondary btn-icon"
+              style={{ width: '24px', height: '24px' }}
+              onClick={() => setIsDrawerOpen(false)}
+            >
+              <X size={14} />
+            </button>
+          </div>
+
+          <div className="drawer-content">
+            {/* TAB 1: MEDIA */}
+            {activeTab === 'video' && (
+              <>
+                {/* TikTok URL Form inside Drawer */}
+                <form onSubmit={handleTikTokFormSubmit} className="form-group" style={{ marginBottom: '8px' }}>
+                  <label className="form-label">Dán URL Video TikTok</label>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="https://www.tiktok.com/@..."
+                      value={tiktokInput}
+                      onChange={(e) => setTiktokInput(e.target.value)}
+                      disabled={isTikTokLoading}
+                    />
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                      style={{ padding: '0 12px', whiteSpace: 'nowrap', fontSize: '0.78rem' }}
+                      disabled={isTikTokLoading || !tiktokInput}
+                    >
+                      {isTikTokLoading ? <Loader2 size={14} className="animate-spin" /> : 'Nạp'}
+                    </button>
+                  </div>
+                </form>
+
+                {!videoData ? (
+                  <div style={{ textAlign: 'center', padding: '12px 0', fontSize: '0.78rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
+                    Hoặc chọn file từ máy tính
+                    <label className="btn btn-secondary" style={{ cursor: 'pointer', width: '100%', marginTop: '8px' }}>
+                      <Upload size={14} /> Chọn File Từ Máy
+                      <input
+                        type="file"
+                        accept="video/*"
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            onFileSelect(e.target.files[0]);
+                          }
+                        }}
+                      />
+                    </label>
+
+                    <button className="btn btn-secondary" onClick={onLoadSample} style={{ width: '100%', marginTop: '6px' }}>
+                      <Sparkles size={14} style={{ color: '#a5b4fc' }} /> Thử Video Mẫu
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div
+                      style={{
+                        padding: '10px 12px',
+                        background: 'rgba(255, 255, 255, 0.04)',
+                        borderRadius: 'var(--radius-md)',
+                        border: '1px solid var(--border-color)',
+                      }}
+                    >
+                      <div style={{ fontSize: '0.8rem', fontWeight: '700', wordBreak: 'break-all' }}>
+                        🎬 {videoData.name}
+                      </div>
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+                          gap: '6px',
+                          marginTop: '8px',
+                          fontSize: '0.74rem',
+                          color: 'var(--text-muted)',
+                        }}
+                      >
+                        <div>Kích thước: <strong>{videoData.width}x{videoData.height}</strong></div>
+                        <div>Thời lượng: <strong>{videoData.duration?.toFixed(1)}s</strong></div>
+                      </div>
+                    </div>
+
+                    <label className="btn btn-secondary" style={{ cursor: 'pointer', width: '100%' }}>
+                      <Upload size={14} /> Đổi Video Khác
+                      <input
+                        type="file"
+                        accept="video/*"
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            onFileSelect(e.target.files[0]);
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* TAB 2: TEXT */}
+            {activeTab === 'text' && (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: '700' }}>Danh Sách Text Layers</span>
+                  <button className="btn btn-primary btn-icon" title="Thêm chữ mới" onClick={onAddText}>
+                    <Plus size={16} />
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '130px', overflowY: 'auto' }}>
+                  {textLayers.map((layer, index) => (
+                    <div
+                      key={layer.id}
+                      onClick={() => setSelectedTextId(layer.id)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '6px 10px',
+                        borderRadius: 'var(--radius-md)',
+                        background: selectedTextId === layer.id ? 'rgba(99, 102, 241, 0.2)' : 'rgba(255, 255, 255, 0.03)',
+                        border: `1px solid ${selectedTextId === layer.id ? 'var(--primary)' : 'var(--border-color)'}`,
+                        cursor: 'pointer',
+                        minWidth: 0,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', minWidth: 0 }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontWeight: '700', flexShrink: 0 }}>
+                          #{index + 1}
+                        </span>
+                        <span style={{ fontSize: '0.78rem', fontWeight: '600', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                          {layer.text?.replace(/\n/g, ' ') || 'Chữ rỗng'}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                        <button
+                          className="btn btn-secondary btn-icon"
+                          style={{ width: '24px', height: '24px' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onUpdateText(layer.id, { visible: !layer.visible });
+                          }}
+                        >
+                          {layer.visible ? <Eye size={12} /> : <EyeOff size={12} style={{ opacity: 0.5 }} />}
+                        </button>
+                        <button
+                          className="btn btn-danger btn-icon"
+                          style={{ width: '24px', height: '24px' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteText(layer.id);
+                          }}
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {textLayers.length === 0 && (
+                    <div style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '10px 0', fontSize: '0.78rem' }}>
+                      Bấm nút '+' để thêm chữ vào video
+                    </div>
+                  )}
+                </div>
+
+                {selectedTextLayer && (
+                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div className="form-group">
+                      <label className="form-label">Nội dung (Enter xuống dòng)</label>
+                      <textarea
+                        rows={3}
+                        className="form-textarea"
+                        style={{ resize: 'vertical' }}
+                        value={selectedTextLayer.text}
+                        onChange={(e) => onUpdateText(selectedTextLayer.id, { text: e.target.value })}
+                        placeholder="Nhập chữ... (Enter để xuống dòng)"
+                      />
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
+                      <div className="form-group">
+                        <label className="form-label">Font chữ</label>
+                        <select
+                          className="form-select"
+                          value={selectedTextLayer.fontFamily}
+                          onChange={(e) => onUpdateText(selectedTextLayer.id, { fontFamily: e.target.value })}
+                        >
+                          <option value="Be Vietnam Pro">Be Vietnam Pro</option>
+                          <option value="Inter">Inter</option>
+                          <option value="Outfit">Outfit</option>
+                          <option value="Impact">Impact</option>
+                          <option value="Space Grotesk">Space Grotesk</option>
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Cỡ chữ: {selectedTextLayer.fontSize}px</label>
+                        <input
+                          type="range"
+                          className="range-slider"
+                          min="14"
+                          max="160"
+                          value={selectedTextLayer.fontSize}
+                          onChange={(e) => onUpdateText(selectedTextLayer.id, { fontSize: Number(e.target.value) })}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
+                      <div className="form-group">
+                        <label className="form-label">Màu chữ</label>
+                        <input
+                          type="color"
+                          value={selectedTextLayer.color || '#ffffff'}
+                          onChange={(e) => onUpdateText(selectedTextLayer.id, { color: e.target.value })}
+                          style={{ width: '100%', height: '32px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: 'transparent' }}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Kiểu nền</label>
+                        <select
+                          className="form-select"
+                          value={selectedTextLayer.bgStyle || 'box'}
+                          onChange={(e) => onUpdateText(selectedTextLayer.id, { bgStyle: e.target.value })}
+                        >
+                          <option value="none">Trong suốt</option>
+                          <option value="box">Khung màu</option>
+                          <option value="outline">Khung viền</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {selectedTextLayer.bgStyle !== 'none' && (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
+                        <div className="form-group">
+                          <label className="form-label">Màu nền</label>
+                          <input
+                            type="color"
+                            value={selectedTextLayer.bgColor === 'transparent' ? '#000000' : (selectedTextLayer.bgColor || '#000000')}
+                            onChange={(e) => onUpdateText(selectedTextLayer.id, { bgColor: e.target.value })}
+                            style={{ width: '100%', height: '32px', borderRadius: '6px', border: 'none', cursor: 'pointer', background: 'transparent' }}
+                          />
+                        </div>
+
+                        <div className="form-group">
+                          <label className="form-label">Độ mờ: {Math.round((selectedTextLayer.bgOpacity ?? 1) * 100)}%</label>
+                          <input
+                            type="range"
+                            className="range-slider"
+                            min="0"
+                            max="1"
+                            step="0.05"
+                            value={selectedTextLayer.bgOpacity ?? 1}
+                            onChange={(e) => onUpdateText(selectedTextLayer.id, { bgOpacity: Number(e.target.value) })}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Timeline Start & End Controls */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '6px' }}>
+                      <div className="form-group">
+                        <label className="form-label">Bắt đầu: {selectedTextLayer.startTime}s</label>
+                        <input
+                          type="range"
+                          className="range-slider"
+                          min="0"
+                          max={videoData?.duration || 10}
+                          step="0.1"
+                          value={selectedTextLayer.startTime}
+                          onChange={(e) => onUpdateText(selectedTextLayer.id, { startTime: Number(e.target.value) })}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Kết thúc: {selectedTextLayer.endTime}s</label>
+                        <input
+                          type="range"
+                          className="range-slider"
+                          min="0"
+                          max={videoData?.duration || 10}
+                          step="0.1"
+                          value={selectedTextLayer.endTime}
+                          onChange={(e) => onUpdateText(selectedTextLayer.id, { endTime: Number(e.target.value) })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* TAB 3: CROP */}
+            {activeTab === 'crop' && (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Presets Tỷ Lệ</label>
+                  <div className="preset-grid">
+                    {CROP_PRESETS.map((preset) => (
+                      <div
+                        key={preset.name}
+                        className={`preset-card ${crop.presetName === preset.name ? 'active' : ''}`}
+                        onClick={() => applyCropPreset(preset)}
+                      >
+                        <span className="preset-name">{preset.name}</span>
+                        <span className="preset-ratio">{preset.ratio}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
+                  <div className="form-group" style={{ marginBottom: '8px' }}>
+                    <div className="form-label"><span>Rộng (Width): {crop.width}%</span></div>
+                    <input
+                      type="range"
+                      className="range-slider"
+                      min="10"
+                      max="100"
+                      value={crop.width}
+                      onChange={(e) => setCrop({ ...crop, width: Number(e.target.value), presetName: 'Tùy chỉnh' })}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: '8px' }}>
+                    <div className="form-label"><span>Cao (Height): {crop.height}%</span></div>
+                    <input
+                      type="range"
+                      className="range-slider"
+                      min="10"
+                      max="100"
+                      value={crop.height}
+                      onChange={(e) => setCrop({ ...crop, height: Number(e.target.value), presetName: 'Tùy chỉnh' })}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: '8px' }}>
+                    <div className="form-label"><span>Vị trí ngang (X): {crop.x}%</span></div>
+                    <input
+                      type="range"
+                      className="range-slider"
+                      min="0"
+                      max={Math.max(0, 100 - crop.width)}
+                      value={crop.x}
+                      onChange={(e) => setCrop({ ...crop, x: Number(e.target.value), presetName: 'Tùy chỉnh' })}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: '8px' }}>
+                    <div className="form-label"><span>Vị trí dọc (Y): {crop.y}%</span></div>
+                    <input
+                      type="range"
+                      className="range-slider"
+                      min="0"
+                      max={Math.max(0, 100 - crop.height)}
+                      value={crop.y}
+                      onChange={(e) => setCrop({ ...crop, y: Number(e.target.value), presetName: 'Tùy chỉnh' })}
+                    />
+                  </div>
+
+                  <button
+                    className="btn btn-secondary"
+                    style={{ width: '100%', marginTop: '4px' }}
+                    onClick={() => applyCropPreset(CROP_PRESETS[0])}
+                  >
+                    Reset Khung Hình Gốc
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* TAB 4: AUDIO & SPEED */}
+            {activeTab === 'audio' && (
+              <>
+                <div className="form-group">
+                  <label className="form-label">
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Volume2 size={14} /> Âm lượng Video: {Math.round(volume * 100)}%
+                    </span>
+                  </label>
+                  <input
+                    type="range"
+                    className="range-slider"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={volume}
+                    onChange={(e) => setVolume(Number(e.target.value))}
+                  />
+                </div>
+
+                <div className="form-group" style={{ marginTop: '8px' }}>
+                  <label className="form-label">Tốc độ phát Video</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '4px' }}>
+                    {[0.5, 1, 1.25, 1.5, 2].map((spd) => (
+                      <button
+                        key={spd}
+                        className={`btn ${playbackSpeed === spd ? 'btn-primary' : 'btn-secondary'}`}
+                        style={{ padding: '4px 2px', fontSize: '0.74rem' }}
+                        onClick={() => setPlaybackSpeed(spd)}
+                      >
+                        {spd}x
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
