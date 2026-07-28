@@ -16,6 +16,46 @@ export function App() {
   const [activeTab, setActiveTab] = useState('text');
   const [isDrawerOpen, setIsDrawerOpen] = useState(true);
 
+  // Default Text Layer Template Settings (Persisted in localStorage)
+  const [defaultTextConfig, setDefaultTextConfig] = useState(() => {
+    try {
+      const saved = localStorage.getItem('quick_edit_default_text');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return {
+      text: "CHÈN CHỮ VÀO VIDEO\nCHÈN CHỮ VÀO VIDEO",
+      fontFamily: 'Be Vietnam Pro',
+      fontSize: 36,
+      color: '#ffffff',
+      bgStyle: 'box',
+      bgColor: '#6366f1',
+      bgOpacity: 1,
+      stroke: true,
+      strokeColor: '#000000',
+      x: 50,
+      y: 18,
+    };
+  });
+
+  const handleUpdateDefaultTextConfig = (updates) => {
+    setDefaultTextConfig((prev) => {
+      const next = { ...prev, ...updates };
+      try {
+        localStorage.setItem('quick_edit_default_text', JSON.stringify(next));
+      } catch (e) {
+        console.error('Lỗi lưu LocalStorage:', e);
+      }
+      return next;
+    });
+  };
+
+  // Sync to LocalStorage on state update
+  React.useEffect(() => {
+    try {
+      localStorage.setItem('quick_edit_default_text', JSON.stringify(defaultTextConfig));
+    } catch (e) {}
+  }, [defaultTextConfig]);
+
   // Video State
   const [videoSrc, setVideoSrc] = useState(null);
   const [videoData, setVideoData] = useState(null);
@@ -92,26 +132,17 @@ export function App() {
 
       generateVideoFilmstrip(url, 12).then((thumbs) => setFilmstripThumbs(thumbs));
 
+      const firstLayerId = `text-${Date.now()}`;
       setTextLayers([
         {
-          id: 'text-1',
-          text: 'CHÈN CHỮ VÀO VIDEO',
-          fontFamily: 'Be Vietnam Pro',
-          fontSize: 36,
-          color: '#ffffff',
-          bgStyle: 'box',
-          bgColor: '#6366f1',
-          bgOpacity: 1,
-          stroke: true,
-          strokeColor: '#000000',
-          x: 50,
-          y: 80,
+          id: firstLayerId,
+          ...defaultTextConfig,
           startTime: 0,
           endTime: Number(dur.toFixed(1)),
           visible: true,
         },
       ]);
-      setSelectedTextId('text-1');
+      setSelectedTextId(firstLayerId);
       setActiveTab('text');
       setIsDrawerOpen(true);
     };
@@ -124,9 +155,6 @@ export function App() {
 
     try {
       const data = await fetchTikTokVideo(url);
-      const videoObj = document.createElement('video');
-      videoObj.src = data.url;
-
       const initialDur = data.duration || 10;
 
       setVideoSrc(data.url);
@@ -140,26 +168,17 @@ export function App() {
 
       generateVideoFilmstrip(data.url, 12).then((thumbs) => setFilmstripThumbs(thumbs));
 
+      const firstLayerId = `text-tiktok-${Date.now()}`;
       setTextLayers([
         {
-          id: 'text-tiktok-1',
-          text: 'CHÈN CHỮ VÀO VIDEO',
-          fontFamily: 'Be Vietnam Pro',
-          fontSize: 36,
-          color: '#ffffff',
-          bgStyle: 'box',
-          bgColor: '#6366f1',
-          bgOpacity: 1,
-          stroke: true,
-          strokeColor: '#000000',
-          x: 50,
-          y: 80,
+          id: firstLayerId,
+          ...defaultTextConfig,
           startTime: 0,
           endTime: initialDur,
           visible: true,
         },
       ]);
-      setSelectedTextId('text-tiktok-1');
+      setSelectedTextId(firstLayerId);
       setActiveTab('text');
       setIsDrawerOpen(true);
     } catch (err) {
@@ -185,24 +204,17 @@ export function App() {
 
     generateVideoFilmstrip(sample.url, 12).then((thumbs) => setFilmstripThumbs(thumbs));
 
+    const firstLayerId = `text-sample-${Date.now()}`;
     setTextLayers([
       {
-        id: 'text-sample-1',
-        text: '🔥 QUICK EDIT VIDEO',
-        fontFamily: 'Outfit',
-        fontSize: 42,
-        color: '#ffffff',
-        bgStyle: 'box',
-        bgColor: '#ec4899',
-        bgOpacity: 1,
-        x: 50,
-        y: 20,
+        id: firstLayerId,
+        ...defaultTextConfig,
         startTime: 0,
         endTime: sample.duration,
         visible: true,
       },
     ]);
-    setSelectedTextId('text-sample-1');
+    setSelectedTextId(firstLayerId);
     setActiveTab('text');
     setIsDrawerOpen(true);
   };
@@ -224,17 +236,7 @@ export function App() {
     const newId = `text-${Date.now()}`;
     const newLayer = {
       id: newId,
-      text: 'Text mới',
-      fontFamily: 'Be Vietnam Pro',
-      fontSize: 32,
-      color: '#ffffff',
-      bgStyle: 'none',
-      bgColor: '#000000',
-      bgOpacity: 1,
-      stroke: true,
-      strokeColor: '#000000',
-      x: 50,
-      y: 50,
+      ...defaultTextConfig,
       startTime: 0,
       endTime: duration || 10,
       visible: true,
@@ -340,6 +342,8 @@ export function App() {
           setVolume={setVolume}
           onTikTokSubmit={handleTikTokSubmit}
           isTikTokLoading={isTikTokLoading}
+          defaultTextConfig={defaultTextConfig}
+          onUpdateDefaultTextConfig={handleUpdateDefaultTextConfig}
         />
 
         <VideoCanvas

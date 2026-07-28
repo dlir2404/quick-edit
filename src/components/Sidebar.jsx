@@ -14,6 +14,9 @@ import {
   X,
   Link as LinkIcon,
   Loader2,
+  Settings,
+  Save,
+  CheckCircle2,
 } from 'lucide-react';
 
 export function Sidebar({
@@ -38,8 +41,30 @@ export function Sidebar({
   setVolume,
   onTikTokSubmit,
   isTikTokLoading,
+  defaultTextConfig,
+  onUpdateDefaultTextConfig,
 }) {
   const [tiktokInput, setTiktokInput] = useState('');
+  const [showDefaultSettings, setShowDefaultSettings] = useState(false);
+  const [showSaveSuccess, setShowSaveSuccess] = useState(false);
+
+  // Local state for default config form before explicit Save click
+  const [tempDefaultConfig, setTempDefaultConfig] = useState(defaultTextConfig || {});
+
+  // Sync temp state if parent defaultTextConfig changes
+  React.useEffect(() => {
+    if (defaultTextConfig) {
+      setTempDefaultConfig(defaultTextConfig);
+    }
+  }, [defaultTextConfig]);
+
+  const handleSaveDefaultConfig = () => {
+    if (onUpdateDefaultTextConfig) {
+      onUpdateDefaultTextConfig(tempDefaultConfig);
+      setShowSaveSuccess(true);
+      setTimeout(() => setShowSaveSuccess(false), 2500);
+    }
+  };
 
   const CROP_PRESETS = [
     { name: 'Gốc', ratio: 'Full', w: 100, h: 100 },
@@ -123,7 +148,7 @@ export function Sidebar({
         <button
           className={`tool-icon-btn ${activeTab === 'audio' && isDrawerOpen ? 'active' : ''}`}
           onClick={() => handleToolClick('audio')}
-          title="Cấu hình Tốc độ & Âm thanh"
+          title="Cấu hình Tốc độ & Text mặc định"
         >
           <Sliders size={18} />
           <span>Cấu hình</span>
@@ -138,7 +163,7 @@ export function Sidebar({
               {activeTab === 'video' && '📁 Nguồn Video'}
               {activeTab === 'text' && `💬 Chèn Text (${textLayers.length})`}
               {activeTab === 'crop' && '✂️ Cắt Khung Hình (Crop)'}
-              {activeTab === 'audio' && '⚙️ Âm Thanh & Tốc Độ'}
+              {activeTab === 'audio' && '⚙️ Cấu Hình Hệ Thống'}
             </span>
             <button
               className="btn btn-secondary btn-icon"
@@ -153,7 +178,6 @@ export function Sidebar({
             {/* TAB 1: MEDIA */}
             {activeTab === 'video' && (
               <>
-                {/* TikTok URL Form inside Drawer */}
                 <form onSubmit={handleTikTokFormSubmit} className="form-group" style={{ marginBottom: '8px' }}>
                   <label className="form-label">Dán URL Video TikTok</label>
                   <div style={{ display: 'flex', gap: '6px' }}>
@@ -171,7 +195,7 @@ export function Sidebar({
                       style={{ padding: '0 12px', whiteSpace: 'nowrap', fontSize: '0.78rem' }}
                       disabled={isTikTokLoading || !tiktokInput}
                     >
-                      {isTikTokLoading ? <Loader2 size={14} className="animate-spin" /> : 'Nạp'}
+                      {isTikTokLoading ? <Loader2 size={14} className="spin-loader" /> : 'Nạp'}
                     </button>
                   </div>
                 </form>
@@ -248,10 +272,89 @@ export function Sidebar({
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                   <span style={{ fontSize: '0.8rem', fontWeight: '700' }}>Danh Sách Text Layers</span>
-                  <button className="btn btn-primary btn-icon" title="Thêm chữ mới" onClick={onAddText}>
-                    <Plus size={16} />
-                  </button>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <button
+                      className="btn btn-secondary btn-icon"
+                      title="Cấu hình Text Mặc Định"
+                      onClick={() => setShowDefaultSettings(!showDefaultSettings)}
+                    >
+                      <Settings size={15} style={{ color: showDefaultSettings ? 'var(--primary)' : 'inherit' }} />
+                    </button>
+                    <button className="btn btn-primary btn-icon" title="Thêm chữ mới" onClick={onAddText}>
+                      <Plus size={16} />
+                    </button>
+                  </div>
                 </div>
+
+                {/* Collapsible Default Settings Section in Text Tab */}
+                {showDefaultSettings && tempDefaultConfig && (
+                  <div
+                    style={{
+                      padding: '12px',
+                      background: 'rgba(99, 102, 241, 0.08)',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--primary)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '10px',
+                      marginBottom: '8px',
+                    }}
+                  >
+                    <div style={{ fontSize: '0.78rem', fontWeight: '700', color: '#a5b4fc', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Settings size={13} /> Text Mặc Định Cho Video Mới</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Chữ Mặc Định</label>
+                      <textarea
+                        rows={2}
+                        className="form-textarea"
+                        value={tempDefaultConfig.text || ''}
+                        onChange={(e) => setTempDefaultConfig({ ...tempDefaultConfig, text: e.target.value })}
+                        placeholder="Nội dung chữ mặc định..."
+                      />
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
+                      <div className="form-group">
+                        <label className="form-label">Vị trí Y: {tempDefaultConfig.y}%</label>
+                        <input
+                          type="range"
+                          className="range-slider"
+                          min="5"
+                          max="95"
+                          value={tempDefaultConfig.y || 18}
+                          onChange={(e) => setTempDefaultConfig({ ...tempDefaultConfig, y: Number(e.target.value) })}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Vị trí X: {tempDefaultConfig.x}%</label>
+                        <input
+                          type="range"
+                          className="range-slider"
+                          min="5"
+                          max="95"
+                          value={tempDefaultConfig.x || 50}
+                          onChange={(e) => setTempDefaultConfig({ ...tempDefaultConfig, x: Number(e.target.value) })}
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      className="btn btn-primary"
+                      style={{ width: '100%', height: '34px', fontSize: '0.8rem' }}
+                      onClick={handleSaveDefaultConfig}
+                    >
+                      <Save size={14} /> Lưu Cấu Hình Mặc Định
+                    </button>
+
+                    {showSaveSuccess && (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '0.72rem', color: '#34d399', fontWeight: '600' }}>
+                        <CheckCircle2 size={13} /> Đã lưu vào LocalStorage thành công!
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '130px', overflowY: 'auto' }}>
                   {textLayers.map((layer, index) => (
@@ -517,7 +620,7 @@ export function Sidebar({
               </>
             )}
 
-            {/* TAB 4: AUDIO & SPEED */}
+            {/* TAB 4: AUDIO & SYSTEM CONFIG */}
             {activeTab === 'audio' && (
               <>
                 <div className="form-group">
@@ -537,7 +640,7 @@ export function Sidebar({
                   />
                 </div>
 
-                <div className="form-group" style={{ marginTop: '8px' }}>
+                <div className="form-group" style={{ marginTop: '8px', marginBottom: '14px' }}>
                   <label className="form-label">Tốc độ phát Video</label>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '4px' }}>
                     {[0.5, 1, 1.25, 1.5, 2].map((spd) => (
@@ -552,6 +655,101 @@ export function Sidebar({
                     ))}
                   </div>
                 </div>
+
+                {/* System Default Text Configuration Card */}
+                {tempDefaultConfig && (
+                  <div
+                    style={{
+                      borderTop: '1px solid var(--border-color)',
+                      paddingTop: '14px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '10px',
+                    }}
+                  >
+                    <div style={{ fontSize: '0.85rem', fontWeight: '800', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>📝 Cấu Hình Text Mặc Định</span>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Nội dung chữ mặc định</label>
+                      <textarea
+                        rows={2}
+                        className="form-textarea"
+                        value={tempDefaultConfig.text || ''}
+                        onChange={(e) => setTempDefaultConfig({ ...tempDefaultConfig, text: e.target.value })}
+                        placeholder="Nội dung chữ..."
+                      />
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
+                      <div className="form-group">
+                        <label className="form-label">Vị trí Y: {tempDefaultConfig.y}%</label>
+                        <input
+                          type="range"
+                          className="range-slider"
+                          min="5"
+                          max="95"
+                          value={tempDefaultConfig.y || 18}
+                          onChange={(e) => setTempDefaultConfig({ ...tempDefaultConfig, y: Number(e.target.value) })}
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Vị trí X: {tempDefaultConfig.x}%</label>
+                        <input
+                          type="range"
+                          className="range-slider"
+                          min="5"
+                          max="95"
+                          value={tempDefaultConfig.x || 50}
+                          onChange={(e) => setTempDefaultConfig({ ...tempDefaultConfig, x: Number(e.target.value) })}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
+                      <div className="form-group">
+                        <label className="form-label">Cỡ chữ: {tempDefaultConfig.fontSize}px</label>
+                        <input
+                          type="range"
+                          className="range-slider"
+                          min="14"
+                          max="120"
+                          value={tempDefaultConfig.fontSize || 36}
+                          onChange={(e) => setTempDefaultConfig({ ...tempDefaultConfig, fontSize: Number(e.target.value) })}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Kiểu nền</label>
+                        <select
+                          className="form-select"
+                          value={tempDefaultConfig.bgStyle || 'box'}
+                          onChange={(e) => setTempDefaultConfig({ ...tempDefaultConfig, bgStyle: e.target.value })}
+                        >
+                          <option value="none">Trong suốt</option>
+                          <option value="box">Khung màu</option>
+                          <option value="outline">Khung viền</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Explicit Save Button */}
+                    <button
+                      className="btn btn-primary"
+                      style={{ width: '100%', height: '36px', marginTop: '6px', fontSize: '0.82rem' }}
+                      onClick={handleSaveDefaultConfig}
+                    >
+                      <Save size={15} /> Lưu Cấu Hình Mặc Định
+                    </button>
+
+                    {showSaveSuccess && (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '0.74rem', color: '#34d399', fontWeight: '600', marginTop: '2px' }}>
+                        <CheckCircle2 size={14} /> Đã lưu vào LocalStorage thành công!
+                      </div>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>
