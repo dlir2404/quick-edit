@@ -388,6 +388,7 @@ export function App() {
         progress={exportProgress}
         exportResult={exportResult}
         onClose={() => setExportResult(null)}
+        onNewProject={handleReset}
       />
     </div>
   );

@@ -1,7 +1,7 @@
 import React from 'react';
-import { Download, Loader2, CheckCircle2, X } from 'lucide-react';
+import { Download, Loader2, CheckCircle2, X, PlusCircle } from 'lucide-react';
 
-export function ExportModal({ isExporting, progress, exportResult, onClose }) {
+export function ExportModal({ isExporting, progress, exportResult, onClose, onNewProject }) {
   if (!isExporting && !exportResult) return null;
 
   return (
@@ -21,7 +21,7 @@ export function ExportModal({ isExporting, progress, exportResult, onClose }) {
         {isExporting && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', margin: '16px 0' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', color: 'var(--primary)' }}>
-              <Loader2 size={32} className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} />
+              <Loader2 size={32} className="spin-loader" />
               <span style={{ fontSize: '1.2rem', fontWeight: '700' }}>{progress}%</span>
             </div>
 
@@ -36,20 +36,33 @@ export function ExportModal({ isExporting, progress, exportResult, onClose }) {
         )}
 
         {exportResult && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center', margin: '12px 0' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center', margin: '12px 0' }}>
             <CheckCircle2 size={56} style={{ color: '#34d399' }} />
             <p style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>
               Video đã được cắt & ghép chữ hoàn tất!
             </p>
 
-            <a
-              href={exportResult.url}
-              download={`quick_edit_${Date.now()}.${exportResult.mimeType?.includes('mp4') ? 'mp4' : 'webm'}`}
-              className="btn btn-primary"
-              style={{ width: '100%', padding: '12px', fontSize: '1rem' }}
-            >
-              <Download size={18} /> Tải Video Ngay
-            </a>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+              <a
+                href={exportResult.url}
+                download={`quick_edit_${Date.now()}.${exportResult.mimeType?.includes('mp4') ? 'mp4' : 'webm'}`}
+                className="btn btn-primary"
+                style={{ width: '100%', padding: '12px', fontSize: '0.95rem' }}
+              >
+                <Download size={18} /> Tải Video Ngay
+              </a>
+
+              <button
+                className="btn btn-secondary"
+                style={{ width: '100%', padding: '10px', fontSize: '0.9rem' }}
+                onClick={() => {
+                  onClose();
+                  if (onNewProject) onNewProject();
+                }}
+              >
+                <PlusCircle size={16} /> Edit Video Mới
+              </button>
+            </div>
           </div>
         )}
       </div>
