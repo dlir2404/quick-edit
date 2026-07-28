@@ -12,7 +12,6 @@ import {
   Volume2,
   Sparkles,
   X,
-  Link as LinkIcon,
   Loader2,
   Settings,
   Save,
@@ -116,6 +115,14 @@ export function Sidebar({
 
   return (
     <>
+      {/* Mobile Backdrop Overlay when drawer is open */}
+      {isDrawerOpen && (
+        <div
+          className="drawer-backdrop-mobile"
+          onClick={() => setIsDrawerOpen(false)}
+        />
+      )}
+
       {/* Vertical Icon Toolbar (56px) */}
       <div className="vertical-icon-toolbar">
         <button
@@ -139,31 +146,32 @@ export function Sidebar({
         <button
           className={`tool-icon-btn ${activeTab === 'crop' && isDrawerOpen ? 'active' : ''}`}
           onClick={() => handleToolClick('crop')}
-          title="Cắt khung hình Crop"
+          title="Tỷ lệ & Cắt video"
         >
           <CropIcon size={18} />
           <span>Crop</span>
         </button>
 
         <button
-          className={`tool-icon-btn ${activeTab === 'audio' && isDrawerOpen ? 'active' : ''}`}
-          onClick={() => handleToolClick('audio')}
-          title="Cấu hình Tốc độ & Text mặc định"
+          className={`tool-icon-btn ${activeTab === 'controls' && isDrawerOpen ? 'active' : ''}`}
+          onClick={() => handleToolClick('controls')}
+          title="Tốc độ & Âm lượng"
         >
           <Sliders size={18} />
-          <span>Cấu hình</span>
+          <span>Điều khiển</span>
         </button>
       </div>
 
-      {/* Flyout Drawer Panel (320px) */}
+      {/* Flyout Drawer Panel */}
       {isDrawerOpen && (
         <div className="tool-drawer-panel">
+          <div className="mobile-sheet-handle" onClick={() => setIsDrawerOpen(false)} />
           <div className="drawer-header">
             <span>
               {activeTab === 'video' && '📁 Nguồn Video'}
               {activeTab === 'text' && `💬 Chèn Text (${textLayers.length})`}
               {activeTab === 'crop' && '✂️ Cắt Khung Hình (Crop)'}
-              {activeTab === 'audio' && '⚙️ Cấu Hình Hệ Thống'}
+              {(activeTab === 'audio' || activeTab === 'controls') && '🎛️ Điều Khiển & Cấu Hình'}
             </span>
             <button
               className="btn btn-secondary btn-icon"
@@ -621,7 +629,7 @@ export function Sidebar({
             )}
 
             {/* TAB 4: AUDIO & SYSTEM CONFIG */}
-            {activeTab === 'audio' && (
+            {(activeTab === 'audio' || activeTab === 'controls') && (
               <>
                 <div className="form-group">
                   <label className="form-label">

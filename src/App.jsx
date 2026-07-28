@@ -13,8 +13,8 @@ export function App() {
   const videoRef = useRef(null);
 
   // Active Tab & Drawer state
-  const [activeTab, setActiveTab] = useState('text');
-  const [isDrawerOpen, setIsDrawerOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState('video');
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   // Default Text Layer Template Settings (Persisted in localStorage)
   const [defaultTextConfig, setDefaultTextConfig] = useState(() => {
@@ -228,7 +228,7 @@ export function App() {
     setFilmstripThumbs([]);
     setCrop({ x: 0, y: 0, width: 100, height: 100, presetName: 'Gốc (Full)' });
     setActiveTab('video');
-    setIsDrawerOpen(true);
+    setIsDrawerOpen(false);
   };
 
   // Add text layer

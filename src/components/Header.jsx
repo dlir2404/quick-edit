@@ -8,22 +8,22 @@ export function Header({ onLoadSample, onReset, videoLoaded, onExportClick }) {
         <div className="brand-icon">
           <Film size={22} />
         </div>
-        <div>
+        <div className="brand-text-container">
           <h1 className="brand-title gradient-text">QuickEdit Studio</h1>
-          <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+          <p className="brand-tagline">
             Video Editing Client-Side Trực Tiếp
           </p>
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <div className="header-actions">
         <span className="badge badge-privacy">
-          <ShieldCheck size={14} /> 100% Client-Side Privacy
+          <ShieldCheck size={14} /> <span className="badge-text">100% Client-Side</span>
         </span>
 
         {!videoLoaded && (
-          <button className="btn btn-secondary" onClick={onLoadSample}>
-            <Sparkles size={16} style={{ color: '#a5b4fc' }} /> Thử Video Mẫu
+          <button className="btn btn-secondary btn-header-sample" onClick={onLoadSample}>
+            <Sparkles size={16} style={{ color: '#a5b4fc' }} /> <span className="btn-text">Thử Video Mẫu</span>
           </button>
         )}
 
@@ -32,8 +32,8 @@ export function Header({ onLoadSample, onReset, videoLoaded, onExportClick }) {
             <button className="btn btn-secondary btn-icon" title="Tải lại / Xóa video" onClick={onReset}>
               <RefreshCw size={16} />
             </button>
-            <button className="btn btn-primary" onClick={onExportClick}>
-              <Download size={16} /> Xuất Video
+            <button className="btn btn-primary btn-header-export" onClick={onExportClick}>
+              <Download size={16} /> <span className="btn-text">Xuất Video</span>
             </button>
           </>
         )}

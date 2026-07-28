@@ -241,13 +241,24 @@ export function VideoCanvas({
     }
   };
 
+  const getEventCoords = (e) => {
+    if (e.touches && e.touches.length > 0) {
+      return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+    }
+    if (e.changedTouches && e.changedTouches.length > 0) {
+      return { clientX: e.changedTouches[0].clientX, clientY: e.changedTouches[0].clientY };
+    }
+    return { clientX: e.clientX, clientY: e.clientY };
+  };
+
   const handleCanvasMouseDown = (e) => {
     if (!canvasRef.current) return;
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
+    const { clientX, clientY } = getEventCoords(e);
 
-    const mouseCanvasX = (e.clientX - rect.left) * (canvas.width / rect.width);
-    const mouseCanvasY = (e.clientY - rect.top) * (canvas.height / rect.height);
+    const mouseCanvasX = (clientX - rect.left) * (canvas.width / rect.width);
+    const mouseCanvasY = (clientY - rect.top) * (canvas.height / rect.height);
 
     const selectedLayer = textLayers.find((t) => t.id === selectedTextId);
     if (selectedLayer && selectedLayer.visible) {
@@ -291,7 +302,7 @@ export function VideoCanvas({
         { x: boxX + boxW, y: boxY + boxH },
       ];
 
-      const hitRadius = Math.max(20, selectedLayer.fontSize * 0.6);
+      const hitRadius = Math.max(24, selectedLayer.fontSize * 0.6);
       const isCornerHit = corners.some((c) => {
         const dx = mouseCanvasX - c.x;
         const dy = mouseCanvasY - c.y;
@@ -299,11 +310,12 @@ export function VideoCanvas({
       });
 
       if (isCornerHit) {
-        e.stopPropagation();
+        if (e.cancelable && e.type.startsWith('touch')) e.preventDefault();
+        if (e.stopPropagation) e.stopPropagation();
         setDragMode('resize');
         setDragStart({
-          x: e.clientX,
-          y: e.clientY,
+          x: clientX,
+          y: clientY,
           initialX: selectedLayer.x,
           initialY: selectedLayer.y,
           initialFontSize: selectedLayer.fontSize,
@@ -314,14 +326,15 @@ export function VideoCanvas({
       if (
         mouseCanvasX >= boxX &&
         mouseCanvasX <= boxX + boxW &&
-        mouseCanvasY >= boxY &&
-        mouseCanvasY <= boxY + boxH
+        mouseCanvasY >= bgY &&
+        mouseCanvasY <= bgY + bgH
       ) {
-        e.stopPropagation();
+        if (e.cancelable && e.type.startsWith('touch')) e.preventDefault();
+        if (e.stopPropagation) e.stopPropagation();
         setDragMode('move');
         setDragStart({
-          x: e.clientX,
-          y: e.clientY,
+          x: clientX,
+          y: clientY,
           initialX: selectedLayer.x,
           initialY: selectedLayer.y,
           initialFontSize: selectedLayer.fontSize,
@@ -373,11 +386,12 @@ export function VideoCanvas({
     }
 
     if (foundLayer) {
+      if (e.cancelable && e.type.startsWith('touch')) e.preventDefault();
       setSelectedTextId(foundLayer.id);
       setDragMode('move');
       setDragStart({
-        x: e.clientX,
-        y: e.clientY,
+        x: clientX,
+        y: clientY,
         initialX: foundLayer.x,
         initialY: foundLayer.y,
         initialFontSize: foundLayer.fontSize,
@@ -392,19 +406,21 @@ export function VideoCanvas({
     const selectedLayer = textLayers.find((t) => t.id === selectedTextId);
     if (!selectedLayer || !containerRef.current) return;
 
+    if (e.cancelable && e.type.startsWith('touch')) e.preventDefault();
+    const { clientX, clientY } = getEventCoords(e);
     const rect = containerRef.current.getBoundingClientRect();
 
     if (dragMode === 'move') {
-      const deltaXPercent = ((e.clientX - dragStart.x) / rect.width) * 100;
-      const deltaYPercent = ((e.clientY - dragStart.y) / rect.height) * 100;
+      const deltaXPercent = ((clientX - dragStart.x) / rect.width) * 100;
+      const deltaYPercent = ((clientY - dragStart.y) / rect.height) * 100;
 
       const newX = Math.max(5, Math.min(95, dragStart.initialX + deltaXPercent));
       const newY = Math.max(5, Math.min(95, dragStart.initialY + deltaYPercent));
 
       onUpdateText(selectedTextId, { x: Math.round(newX), y: Math.round(newY) });
     } else if (dragMode === 'resize') {
-      const deltaX = e.clientX - dragStart.x;
-      const deltaY = e.clientY - dragStart.y;
+      const deltaX = clientX - dragStart.x;
+      const deltaY = clientY - dragStart.y;
       const dist = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
       const scaleFactor = deltaX > 0 || deltaY > 0 ? 1 + dist / 180 : 1 - dist / 180;
 
@@ -530,7 +546,13 @@ export function VideoCanvas({
   }
 
   return (
-    <div className="stage-section" onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
+    <div
+      className="stage-section"
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onTouchMove={handleMouseMove}
+      onTouchEnd={handleMouseUp}
+    >
       {/* Hidden Video Source with real metadata listener */}
       <video
         ref={videoRef}
@@ -551,6 +573,7 @@ export function VideoCanvas({
             ref={canvasRef}
             className="main-preview-canvas"
             onMouseDown={handleCanvasMouseDown}
+            onTouchStart={handleCanvasMouseDown}
             style={{ cursor: dragMode === 'resize' ? 'nwse-resize' : dragMode === 'move' ? 'move' : 'pointer' }}
           />
         </div>

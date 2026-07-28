@@ -15,6 +15,12 @@ export function Timeline({
   // Dragging track state: { layerId, mode: 'left' | 'right' | 'move', startX, initialStart, initialEnd }
   const [dragState, setDragState] = useState(null);
 
+  const getClientX = (e) => {
+    if (e.touches && e.touches.length > 0) return e.touches[0].clientX;
+    if (e.changedTouches && e.changedTouches.length > 0) return e.changedTouches[0].clientX;
+    return e.clientX;
+  };
+
   const calculateSecFromX = (clientX) => {
     if (!tracksAreaRef.current || !duration || duration <= 0) return 0;
     const rect = tracksAreaRef.current.getBoundingClientRect();
@@ -26,18 +32,19 @@ export function Timeline({
 
   const handleTimelineClick = (e) => {
     if (dragState) return;
-    const sec = calculateSecFromX(e.clientX);
+    const sec = calculateSecFromX(getClientX(e));
     onSeek(sec);
   };
 
   // Start dragging track handle or track body
   const handleStartDragTrack = (e, layer, mode) => {
-    e.stopPropagation();
+    if (e.stopPropagation) e.stopPropagation();
+    const clientX = getClientX(e);
     setSelectedTextId(layer.id);
     setDragState({
       layerId: layer.id,
       mode,
-      startX: e.clientX,
+      startX: clientX,
       initialStart: layer.startTime,
       initialEnd: layer.endTime,
     });
@@ -45,9 +52,10 @@ export function Timeline({
 
   const handleMouseMove = (e) => {
     if (!dragState || !tracksAreaRef.current || !duration) return;
+    const clientX = getClientX(e);
     const rect = tracksAreaRef.current.getBoundingClientRect();
     const trackWidth = Math.max(10, rect.width - 32);
-    const deltaX = e.clientX - dragState.startX;
+    const deltaX = clientX - dragState.startX;
     const deltaSec = (deltaX / trackWidth) * duration;
 
     if (dragState.mode === 'left') {
@@ -101,7 +109,13 @@ export function Timeline({
   const ticks = getRulerTicks();
 
   return (
-    <div className="timeline-fullwidth" onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
+    <div
+      className="timeline-fullwidth"
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onTouchMove={handleMouseMove}
+      onTouchEnd={handleMouseUp}
+    >
       {/* Top Time Ruler Bar (Inner padded to match 16px track margins) */}
       <div className="timeline-top-ruler">
         <div className="timeline-ruler-inner">
@@ -127,7 +141,11 @@ export function Timeline({
       </div>
 
       {/* Main Track Area */}
-      <div className="timeline-tracks-area" ref={tracksAreaRef} onClick={handleTimelineClick}>
+      <div
+        className="timeline-tracks-area"
+        ref={tracksAreaRef}
+        onClick={handleTimelineClick}
+      >
         <div className="timeline-track-inner-zone">
           {/* Filmstrip Thumbnail Track */}
           <div className="filmstrip-track">
@@ -157,12 +175,14 @@ export function Timeline({
                     width: `${Math.max(2, widthPercent)}%`,
                   }}
                   onMouseDown={(e) => handleStartDragTrack(e, layer, 'move')}
+                  onTouchStart={(e) => handleStartDragTrack(e, layer, 'move')}
                 >
                   {/* Left Edge Drag Handle (Start Time) */}
                   <div
                     className="timeline-track-handle left"
                     title="Kéo để đổi thời gian bắt đầu"
                     onMouseDown={(e) => handleStartDragTrack(e, layer, 'left')}
+                    onTouchStart={(e) => handleStartDragTrack(e, layer, 'left')}
                   />
 
                   <span
@@ -183,6 +203,7 @@ export function Timeline({
                     className="timeline-track-handle right"
                     title="Kéo để đổi thời gian kết thúc"
                     onMouseDown={(e) => handleStartDragTrack(e, layer, 'right')}
+                    onTouchStart={(e) => handleStartDragTrack(e, layer, 'right')}
                   />
                 </div>
               );
