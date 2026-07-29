@@ -4,9 +4,15 @@ import { Download, Loader2, CheckCircle2, X, PlusCircle } from 'lucide-react';
 export function ExportModal({ isExporting, progress, exportResult, onClose, onNewProject }) {
   if (!isExporting && !exportResult) return null;
 
+  const handleBackdropClick = () => {
+    if (!isExporting && onClose) {
+      onClose();
+    }
+  };
+
   return (
-    <div className="export-modal-backdrop">
-      <div className="export-modal glass-panel">
+    <div className="export-modal-backdrop" onClick={handleBackdropClick}>
+      <div className="export-modal glass-panel" onClick={(e) => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ fontSize: '1.15rem', fontWeight: '800' }} className="gradient-text">
             {exportResult ? 'Xuất Video Thành Công!' : 'Đang Đốt Khung Hình & Xuất Video...'}

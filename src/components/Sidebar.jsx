@@ -348,6 +348,50 @@ export function Sidebar({
                       </div>
                     </div>
 
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
+                      <div className="form-group">
+                        <label className="form-label">Bắt đầu từ (s)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="600"
+                          step="0.5"
+                          className="form-input"
+                          value={tempDefaultConfig.defaultStartTime ?? 0}
+                          onChange={(e) => setTempDefaultConfig({ ...tempDefaultConfig, defaultStartTime: Math.max(0, Number(e.target.value)) })}
+                          placeholder="0 (Đầu video)"
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Kết thúc tại (s)</label>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <select
+                            className="form-select"
+                            style={{ flex: 1 }}
+                            value={tempDefaultConfig.defaultEndTimeMode || 'full'}
+                            onChange={(e) => setTempDefaultConfig({ ...tempDefaultConfig, defaultEndTimeMode: e.target.value })}
+                          >
+                            <option value="full">Hết Video</option>
+                            <option value="custom">Cố định (s)</option>
+                          </select>
+
+                          {tempDefaultConfig.defaultEndTimeMode === 'custom' && (
+                            <input
+                              type="number"
+                              min="0.5"
+                              max="600"
+                              step="0.5"
+                              className="form-input"
+                              style={{ width: '65px' }}
+                              value={tempDefaultConfig.defaultEndTime ?? 10}
+                              onChange={(e) => setTempDefaultConfig({ ...tempDefaultConfig, defaultEndTime: Math.max(0.5, Number(e.target.value)) })}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
                     <button
                       className="btn btn-primary"
                       style={{ width: '100%', height: '34px', fontSize: '0.8rem' }}
@@ -739,6 +783,50 @@ export function Sidebar({
                           <option value="box">Khung màu</option>
                           <option value="outline">Khung viền</option>
                         </select>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
+                      <div className="form-group">
+                        <label className="form-label">Bắt đầu từ (s)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="600"
+                          step="0.5"
+                          className="form-input"
+                          value={tempDefaultConfig.defaultStartTime ?? 0}
+                          onChange={(e) => setTempDefaultConfig({ ...tempDefaultConfig, defaultStartTime: Math.max(0, Number(e.target.value)) })}
+                          placeholder="0 (Đầu video)"
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Kết thúc tại (s)</label>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <select
+                            className="form-select"
+                            style={{ flex: 1 }}
+                            value={tempDefaultConfig.defaultEndTimeMode || 'full'}
+                            onChange={(e) => setTempDefaultConfig({ ...tempDefaultConfig, defaultEndTimeMode: e.target.value })}
+                          >
+                            <option value="full">Hết Video</option>
+                            <option value="custom">Cố định (s)</option>
+                          </select>
+
+                          {tempDefaultConfig.defaultEndTimeMode === 'custom' && (
+                            <input
+                              type="number"
+                              min="0.5"
+                              max="600"
+                              step="0.5"
+                              className="form-input"
+                              style={{ width: '65px' }}
+                              value={tempDefaultConfig.defaultEndTime ?? 10}
+                              onChange={(e) => setTempDefaultConfig({ ...tempDefaultConfig, defaultEndTime: Math.max(0.5, Number(e.target.value)) })}
+                            />
+                          )}
+                        </div>
                       </div>
                     </div>
 

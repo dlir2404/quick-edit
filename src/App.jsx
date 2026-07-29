@@ -34,6 +34,9 @@ export function App() {
       strokeColor: '#000000',
       x: 50,
       y: 18,
+      defaultStartTime: 0,
+      defaultEndTimeMode: 'full',
+      defaultEndTime: 10,
     };
   });
 
@@ -108,6 +111,24 @@ export function App() {
     });
   };
 
+  // Helper to compute initial text layer start & end time based on defaultTextConfig
+  const getInitialLayerTiming = (videoDur, config = defaultTextConfig) => {
+    const totalDur = Number((videoDur || 10).toFixed(1));
+    const startSec = Math.max(0, Math.min(totalDur, Number(config?.defaultStartTime) || 0));
+
+    let endSec = totalDur;
+    if (config?.defaultEndTimeMode === 'custom' && config?.defaultEndTime > 0) {
+      endSec = Math.min(totalDur, Number(config.defaultEndTime));
+    }
+    if (endSec <= startSec) {
+      endSec = Math.min(totalDur, Number((startSec + 1).toFixed(1)));
+    }
+    return {
+      startTime: Number(startSec.toFixed(1)),
+      endTime: Number(endSec.toFixed(1)),
+    };
+  };
+
   // Handle Video File Selection
   const handleFileSelect = async (file) => {
     if (!file) return;
@@ -119,26 +140,28 @@ export function App() {
       const dur = (videoObj.duration && isFinite(videoObj.duration) && videoObj.duration > 0)
         ? videoObj.duration
         : 10;
+      const roundedDur = Number(dur.toFixed(1));
 
       setVideoSrc(url);
       setVideoData({
         name: file.name,
         width: videoObj.videoWidth,
         height: videoObj.videoHeight,
-        duration: Number(dur.toFixed(1)),
+        duration: roundedDur,
       });
-      setDuration(Number(dur.toFixed(1)));
+      setDuration(roundedDur);
       setCrop({ x: 0, y: 0, width: 100, height: 100, presetName: 'Gốc (Full)' });
 
       generateVideoFilmstrip(url, 12).then((thumbs) => setFilmstripThumbs(thumbs));
 
+      const timing = getInitialLayerTiming(roundedDur);
       const firstLayerId = `text-${Date.now()}`;
       setTextLayers([
         {
           id: firstLayerId,
           ...defaultTextConfig,
-          startTime: 0,
-          endTime: Number(dur.toFixed(1)),
+          startTime: timing.startTime,
+          endTime: timing.endTime,
           visible: true,
         },
       ]);
@@ -168,13 +191,14 @@ export function App() {
 
       generateVideoFilmstrip(data.url, 12).then((thumbs) => setFilmstripThumbs(thumbs));
 
+      const timing = getInitialLayerTiming(initialDur);
       const firstLayerId = `text-tiktok-${Date.now()}`;
       setTextLayers([
         {
           id: firstLayerId,
           ...defaultTextConfig,
-          startTime: 0,
-          endTime: initialDur,
+          startTime: timing.startTime,
+          endTime: timing.endTime,
           visible: true,
         },
       ]);
@@ -204,13 +228,14 @@ export function App() {
 
     generateVideoFilmstrip(sample.url, 12).then((thumbs) => setFilmstripThumbs(thumbs));
 
+    const timing = getInitialLayerTiming(sample.duration);
     const firstLayerId = `text-sample-${Date.now()}`;
     setTextLayers([
       {
         id: firstLayerId,
         ...defaultTextConfig,
-        startTime: 0,
-        endTime: sample.duration,
+        startTime: timing.startTime,
+        endTime: timing.endTime,
         visible: true,
       },
     ]);
@@ -234,11 +259,12 @@ export function App() {
   // Add text layer
   const handleAddText = () => {
     const newId = `text-${Date.now()}`;
+    const timing = getInitialLayerTiming(duration || 10);
     const newLayer = {
       id: newId,
       ...defaultTextConfig,
-      startTime: 0,
-      endTime: duration || 10,
+      startTime: timing.startTime,
+      endTime: timing.endTime,
       visible: true,
     };
     setTextLayers([...textLayers, newLayer]);
