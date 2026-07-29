@@ -145,6 +145,30 @@ export function App() {
     } catch (e) {}
   }, [defaultTextConfig]);
 
+  // Default Video Overlay Template Settings (Persisted in localStorage)
+  const [defaultOverlayConfig, setDefaultOverlayConfig] = useState(() => {
+    try {
+      const saved = localStorage.getItem('quick_edit_default_overlay');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return {
+      width: 80,
+      opacity: 1,
+      x: 50,
+      y: 50,
+    };
+  });
+
+  const handleUpdateDefaultOverlayConfig = (updates) => {
+    setDefaultOverlayConfig((prev) => {
+      const next = { ...prev, ...updates };
+      try {
+        localStorage.setItem('quick_edit_default_overlay', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
   // Video State
   const [videoSrc, setVideoSrc] = useState(null);
   const [videoData, setVideoData] = useState(null);
@@ -384,11 +408,10 @@ export function App() {
         id: newOverlayId,
         name: file.name,
         url,
-        x: 50,
-        y: 50,
-        width: 80,
-        height: 80,
-        opacity: 0.9,
+        x: defaultOverlayConfig.x !== undefined ? defaultOverlayConfig.x : 50,
+        y: defaultOverlayConfig.y !== undefined ? defaultOverlayConfig.y : 50,
+        width: defaultOverlayConfig.width !== undefined ? defaultOverlayConfig.width : 80,
+        opacity: defaultOverlayConfig.opacity !== undefined ? defaultOverlayConfig.opacity : 1,
         startTime: 0,
         endTime: Math.min(roundedDur, duration || 10),
         volume: 0,
@@ -660,6 +683,8 @@ export function App() {
           isTikTokLoading={isTikTokLoading}
           defaultTextConfig={defaultTextConfig}
           onUpdateDefaultTextConfig={handleUpdateDefaultTextConfig}
+          defaultOverlayConfig={defaultOverlayConfig}
+          onUpdateDefaultOverlayConfig={handleUpdateDefaultOverlayConfig}
         />
 
         <VideoCanvas

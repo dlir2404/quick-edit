@@ -301,25 +301,44 @@ html, body {
   border-color: var(--primary);
 }
 
+.range-slider-container {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .range-slider {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
   min-width: 0;
-  height: 4px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.15);
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.16);
   outline: none;
+  margin: 0;
+  cursor: pointer;
+  vertical-align: middle;
 }
 
 .range-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: var(--primary);
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.4);
   cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.range-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  background: #818cf8;
 }
 
 /* Presets Grid */

@@ -126,13 +126,22 @@ export async function exportVideoClientSide({
 
         // Render Video Overlay Layers during export
         (overlayLayers || []).forEach((overlay) => {
-          if (!overlay.visible) return;
-          if (currentTime < overlay.startTime || currentTime > overlay.endTime) return;
-
           const vEl = overlayVideoElements.get(overlay.id);
-          if (vEl && vEl.readyState >= 1) {
-            const relTime = currentTime - overlay.startTime;
-            if (Math.abs(vEl.currentTime - relTime) > 0.15 && isFinite(relTime) && relTime >= 0) {
+          if (!vEl) return;
+
+          const isActive = overlay.visible && currentTime >= overlay.startTime && currentTime <= overlay.endTime;
+
+          if (!isActive) {
+            if (!vEl.paused) vEl.pause();
+            return;
+          }
+
+          if (vEl) {
+            const relTime = Math.max(0.05, currentTime - overlay.startTime);
+            if (vEl.paused) {
+              vEl.currentTime = relTime;
+              vEl.play().catch(() => {});
+            } else if (Math.abs(vEl.currentTime - relTime) > 0.3) {
               vEl.currentTime = relTime;
             }
 

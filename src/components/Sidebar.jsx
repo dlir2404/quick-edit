@@ -56,6 +56,8 @@ export function Sidebar({
   isTikTokLoading,
   defaultTextConfig,
   onUpdateDefaultTextConfig,
+  defaultOverlayConfig,
+  onUpdateDefaultOverlayConfig,
 }) {
   const [tiktokInput, setTiktokInput] = useState('');
   const [showDefaultSettings, setShowDefaultSettings] = useState(false);
@@ -63,20 +65,30 @@ export function Sidebar({
 
   // Local state for default config form before explicit Save click
   const [tempDefaultConfig, setTempDefaultConfig] = useState(defaultTextConfig || {});
+  const [tempOverlayConfig, setTempOverlayConfig] = useState(defaultOverlayConfig || { width: 80, opacity: 1 });
 
-  // Sync temp state if parent defaultTextConfig changes
+  // Sync temp state if parent configs change
   React.useEffect(() => {
     if (defaultTextConfig) {
       setTempDefaultConfig(defaultTextConfig);
     }
   }, [defaultTextConfig]);
 
+  React.useEffect(() => {
+    if (defaultOverlayConfig) {
+      setTempOverlayConfig(defaultOverlayConfig);
+    }
+  }, [defaultOverlayConfig]);
+
   const handleSaveDefaultConfig = () => {
     if (onUpdateDefaultTextConfig) {
       onUpdateDefaultTextConfig(tempDefaultConfig);
-      setShowSaveSuccess(true);
-      setTimeout(() => setShowSaveSuccess(false), 2500);
     }
+    if (onUpdateDefaultOverlayConfig) {
+      onUpdateDefaultOverlayConfig(tempOverlayConfig);
+    }
+    setShowSaveSuccess(true);
+    setTimeout(() => setShowSaveSuccess(false), 2500);
   };
 
   const CROP_PRESETS = [
@@ -470,9 +482,43 @@ export function Sidebar({
                       </div>
                     </div>
 
+                    {/* Default Video Overlay Settings Section */}
+                    <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '8px', marginTop: '4px' }}>
+                      <span style={{ fontSize: '0.74rem', color: '#06b6d4', fontWeight: '800', display: 'block', marginBottom: '6px' }}>
+                        🎬 Kích Thước Mặc Định Cho Video Overlay (Watermark/PIP)
+                      </span>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
+                        <div className="form-group">
+                          <label className="form-label">Size Rộng Mặc Định: {tempOverlayConfig.width || 80}%</label>
+                          <input
+                            type="range"
+                            className="range-slider"
+                            min="10"
+                            max="100"
+                            value={tempOverlayConfig.width || 80}
+                            onChange={(e) => setTempOverlayConfig({ ...tempOverlayConfig, width: Number(e.target.value) })}
+                          />
+                        </div>
+
+                        <div className="form-group">
+                          <label className="form-label">Độ Mờ Mặc Định: {Math.round((tempOverlayConfig.opacity ?? 1) * 100)}%</label>
+                          <input
+                            type="range"
+                            className="range-slider"
+                            min="0.1"
+                            max="1"
+                            step="0.05"
+                            value={tempOverlayConfig.opacity ?? 1}
+                            onChange={(e) => setTempOverlayConfig({ ...tempOverlayConfig, opacity: Number(e.target.value) })}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
                     <button
                       className="btn btn-primary"
-                      style={{ width: '100%', height: '34px', fontSize: '0.8rem' }}
+                      style={{ width: '100%', height: '34px', fontSize: '0.8rem', marginTop: '4px' }}
                       onClick={handleSaveDefaultConfig}
                     >
                       <Save size={14} /> Lưu Cấu Hình Mặc Định
@@ -576,14 +622,16 @@ export function Sidebar({
 
                       <div className="form-group">
                         <label className="form-label">Cỡ chữ: {selectedTextLayer.fontSize}px</label>
-                        <input
-                          type="range"
-                          className="range-slider"
-                          min="14"
-                          max="160"
-                          value={selectedTextLayer.fontSize}
-                          onChange={(e) => onUpdateText(selectedTextLayer.id, { fontSize: Number(e.target.value) })}
-                        />
+                        <div className="range-slider-container">
+                          <input
+                            type="range"
+                            className="range-slider"
+                            min="14"
+                            max="160"
+                            value={selectedTextLayer.fontSize}
+                            onChange={(e) => onUpdateText(selectedTextLayer.id, { fontSize: Number(e.target.value) })}
+                          />
+                        </div>
                       </div>
                     </div>
 
@@ -626,15 +674,17 @@ export function Sidebar({
 
                         <div className="form-group">
                           <label className="form-label">Độ mờ: {Math.round((selectedTextLayer.bgOpacity ?? 1) * 100)}%</label>
-                          <input
-                            type="range"
-                            className="range-slider"
-                            min="0"
-                            max="1"
-                            step="0.05"
-                            value={selectedTextLayer.bgOpacity ?? 1}
-                            onChange={(e) => onUpdateText(selectedTextLayer.id, { bgOpacity: Number(e.target.value) })}
-                          />
+                          <div className="range-slider-container">
+                            <input
+                              type="range"
+                              className="range-slider"
+                              min="0"
+                              max="1"
+                              step="0.05"
+                              value={selectedTextLayer.bgOpacity ?? 1}
+                              onChange={(e) => onUpdateText(selectedTextLayer.id, { bgOpacity: Number(e.target.value) })}
+                            />
+                          </div>
                         </div>
                       </div>
                     )}
@@ -643,27 +693,31 @@ export function Sidebar({
                     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '6px' }}>
                       <div className="form-group">
                         <label className="form-label">Bắt đầu: {selectedTextLayer.startTime}s</label>
-                        <input
-                          type="range"
-                          className="range-slider"
-                          min="0"
-                          max={videoData?.duration || 10}
-                          step="0.1"
-                          value={selectedTextLayer.startTime}
-                          onChange={(e) => onUpdateText(selectedTextLayer.id, { startTime: Number(e.target.value) })}
-                        />
+                        <div className="range-slider-container">
+                          <input
+                            type="range"
+                            className="range-slider"
+                            min="0"
+                            max={videoData?.duration || 10}
+                            step="0.1"
+                            value={selectedTextLayer.startTime}
+                            onChange={(e) => onUpdateText(selectedTextLayer.id, { startTime: Number(e.target.value) })}
+                          />
+                        </div>
                       </div>
                       <div className="form-group">
                         <label className="form-label">Kết thúc: {selectedTextLayer.endTime}s</label>
-                        <input
-                          type="range"
-                          className="range-slider"
-                          min="0"
-                          max={videoData?.duration || 10}
-                          step="0.1"
-                          value={selectedTextLayer.endTime}
-                          onChange={(e) => onUpdateText(selectedTextLayer.id, { endTime: Number(e.target.value) })}
-                        />
+                        <div className="range-slider-container">
+                          <input
+                            type="range"
+                            className="range-slider"
+                            min="0"
+                            max={videoData?.duration || 10}
+                            step="0.1"
+                            value={selectedTextLayer.endTime}
+                            onChange={(e) => onUpdateText(selectedTextLayer.id, { endTime: Number(e.target.value) })}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -753,78 +807,109 @@ export function Sidebar({
                     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
                       <div className="form-group">
                         <label className="form-label">Vị trí X: {selectedOverlayLayer.x}%</label>
-                        <input
-                          type="range"
-                          className="range-slider"
-                          min="0"
-                          max="100"
-                          value={selectedOverlayLayer.x}
-                          onChange={(e) => onUpdateOverlay(selectedOverlayLayer.id, { x: Number(e.target.value) })}
-                        />
+                        <div className="range-slider-container">
+                          <input
+                            type="range"
+                            className="range-slider"
+                            min="0"
+                            max="100"
+                            value={selectedOverlayLayer.x}
+                            onChange={(e) => onUpdateOverlay(selectedOverlayLayer.id, { x: Number(e.target.value) })}
+                          />
+                        </div>
                       </div>
                       <div className="form-group">
                         <label className="form-label">Vị trí Y: {selectedOverlayLayer.y}%</label>
-                        <input
-                          type="range"
-                          className="range-slider"
-                          min="0"
-                          max="100"
-                          value={selectedOverlayLayer.y}
-                          onChange={(e) => onUpdateOverlay(selectedOverlayLayer.id, { y: Number(e.target.value) })}
-                        />
+                        <div className="range-slider-container">
+                          <input
+                            type="range"
+                            className="range-slider"
+                            min="0"
+                            max="100"
+                            value={selectedOverlayLayer.y}
+                            onChange={(e) => onUpdateOverlay(selectedOverlayLayer.id, { y: Number(e.target.value) })}
+                          />
+                        </div>
                       </div>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
                       <div className="form-group">
                         <label className="form-label">Kích thước (Rộng): {selectedOverlayLayer.width}%</label>
-                        <input
-                          type="range"
-                          className="range-slider"
-                          min="5"
-                          max="100"
-                          value={selectedOverlayLayer.width}
-                          onChange={(e) => onUpdateOverlay(selectedOverlayLayer.id, { width: Number(e.target.value) })}
-                        />
+                        <div className="range-slider-container">
+                          <input
+                            type="range"
+                            className="range-slider"
+                            min="5"
+                            max="100"
+                            value={selectedOverlayLayer.width}
+                            onChange={(e) => onUpdateOverlay(selectedOverlayLayer.id, { width: Number(e.target.value) })}
+                          />
+                        </div>
                       </div>
                       <div className="form-group">
                         <label className="form-label">Độ mờ: {Math.round((selectedOverlayLayer.opacity ?? 1) * 100)}%</label>
-                        <input
-                          type="range"
-                          className="range-slider"
-                          min="0.1"
-                          max="1"
-                          step="0.05"
-                          value={selectedOverlayLayer.opacity ?? 1}
-                          onChange={(e) => onUpdateOverlay(selectedOverlayLayer.id, { opacity: Number(e.target.value) })}
-                        />
+                        <div className="range-slider-container">
+                          <input
+                            type="range"
+                            className="range-slider"
+                            min="0.1"
+                            max="1"
+                            step="0.05"
+                            value={selectedOverlayLayer.opacity ?? 1}
+                            onChange={(e) => onUpdateOverlay(selectedOverlayLayer.id, { opacity: Number(e.target.value) })}
+                          />
+                        </div>
                       </div>
                     </div>
+
+                    <button
+                      className="btn btn-secondary"
+                      style={{ width: '100%', fontSize: '0.76rem', marginTop: '2px', borderColor: 'rgba(6, 182, 212, 0.4)', color: '#38bdf8' }}
+                      onClick={() => {
+                        if (onUpdateDefaultOverlayConfig) {
+                          onUpdateDefaultOverlayConfig({
+                            width: selectedOverlayLayer.width,
+                            opacity: selectedOverlayLayer.opacity ?? 1,
+                            x: selectedOverlayLayer.x,
+                            y: selectedOverlayLayer.y,
+                          });
+                          setShowSaveSuccess(true);
+                          setTimeout(() => setShowSaveSuccess(false), 2000);
+                        }
+                      }}
+                    >
+                      <Save size={13} /> Lưu Kích Thước Hiện Tại ({selectedOverlayLayer.width}%) Làm Mặc Định
+                    </button>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
                       <div className="form-group">
                         <label className="form-label">Bắt đầu: {selectedOverlayLayer.startTime}s</label>
-                        <input
-                          type="range"
-                          className="range-slider"
-                          min="0"
-                          max={videoData?.duration || 10}
-                          step="0.1"
-                          value={selectedOverlayLayer.startTime}
-                          onChange={(e) => onUpdateOverlay(selectedOverlayLayer.id, { startTime: Number(e.target.value) })}
-                        />
+                        <div className="range-slider-container">
+                          <input
+                            type="range"
+                            className="range-slider"
+                            min="0"
+                            max={videoData?.duration || 10}
+                            step="0.1"
+                            value={selectedOverlayLayer.startTime}
+                            onChange={(e) => onUpdateOverlay(selectedOverlayLayer.id, { startTime: Number(e.target.value) })}
+                          />
+                        </div>
                       </div>
                       <div className="form-group">
                         <label className="form-label">Kết thúc: {selectedOverlayLayer.endTime}s</label>
-                        <input
-                          type="range"
-                          className="range-slider"
-                          min="0"
-                          max={videoData?.duration || 10}
-                          step="0.1"
-                          value={selectedOverlayLayer.endTime}
-                          onChange={(e) => onUpdateOverlay(selectedOverlayLayer.id, { endTime: Number(e.target.value) })}
-                        />
+                        <div className="range-slider-container">
+                          <input
+                            type="range"
+                            className="range-slider"
+                            min="0"
+                            max={videoData?.duration || 10}
+                            step="0.1"
+                            value={selectedOverlayLayer.endTime}
+                            onChange={(e) => onUpdateOverlay(selectedOverlayLayer.id, { endTime: Number(e.target.value) })}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -854,50 +939,58 @@ export function Sidebar({
                 <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
                   <div className="form-group" style={{ marginBottom: '8px' }}>
                     <div className="form-label"><span>Rộng (Width): {crop.width}%</span></div>
-                    <input
-                      type="range"
-                      className="range-slider"
-                      min="10"
-                      max="100"
-                      value={crop.width}
-                      onChange={(e) => setCrop({ ...crop, width: Number(e.target.value), presetName: 'Tùy chỉnh' })}
-                    />
+                    <div className="range-slider-container">
+                      <input
+                        type="range"
+                        className="range-slider"
+                        min="10"
+                        max="100"
+                        value={crop.width}
+                        onChange={(e) => setCrop({ ...crop, width: Number(e.target.value), presetName: 'Tùy chỉnh' })}
+                      />
+                    </div>
                   </div>
 
                   <div className="form-group" style={{ marginBottom: '8px' }}>
                     <div className="form-label"><span>Cao (Height): {crop.height}%</span></div>
-                    <input
-                      type="range"
-                      className="range-slider"
-                      min="10"
-                      max="100"
-                      value={crop.height}
-                      onChange={(e) => setCrop({ ...crop, height: Number(e.target.value), presetName: 'Tùy chỉnh' })}
-                    />
+                    <div className="range-slider-container">
+                      <input
+                        type="range"
+                        className="range-slider"
+                        min="10"
+                        max="100"
+                        value={crop.height}
+                        onChange={(e) => setCrop({ ...crop, height: Number(e.target.value), presetName: 'Tùy chỉnh' })}
+                      />
+                    </div>
                   </div>
 
                   <div className="form-group" style={{ marginBottom: '8px' }}>
                     <div className="form-label"><span>Vị trí ngang (X): {crop.x}%</span></div>
-                    <input
-                      type="range"
-                      className="range-slider"
-                      min="0"
-                      max={Math.max(0, 100 - crop.width)}
-                      value={crop.x}
-                      onChange={(e) => setCrop({ ...crop, x: Number(e.target.value), presetName: 'Tùy chỉnh' })}
-                    />
+                    <div className="range-slider-container">
+                      <input
+                        type="range"
+                        className="range-slider"
+                        min="0"
+                        max={Math.max(0, 100 - crop.width)}
+                        value={crop.x}
+                        onChange={(e) => setCrop({ ...crop, x: Number(e.target.value), presetName: 'Tùy chỉnh' })}
+                      />
+                    </div>
                   </div>
 
                   <div className="form-group" style={{ marginBottom: '8px' }}>
                     <div className="form-label"><span>Vị trí dọc (Y): {crop.y}%</span></div>
-                    <input
-                      type="range"
-                      className="range-slider"
-                      min="0"
-                      max={Math.max(0, 100 - crop.height)}
-                      value={crop.y}
-                      onChange={(e) => setCrop({ ...crop, y: Number(e.target.value), presetName: 'Tùy chỉnh' })}
-                    />
+                    <div className="range-slider-container">
+                      <input
+                        type="range"
+                        className="range-slider"
+                        min="0"
+                        max={Math.max(0, 100 - crop.height)}
+                        value={crop.y}
+                        onChange={(e) => setCrop({ ...crop, y: Number(e.target.value), presetName: 'Tùy chỉnh' })}
+                      />
+                    </div>
                   </div>
 
                   <button
@@ -920,15 +1013,17 @@ export function Sidebar({
                       <Volume2 size={14} /> Âm lượng Video: {Math.round(volume * 100)}%
                     </span>
                   </label>
-                  <input
-                    type="range"
-                    className="range-slider"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    value={volume}
-                    onChange={(e) => setVolume(Number(e.target.value))}
-                  />
+                  <div className="range-slider-container">
+                    <input
+                      type="range"
+                      className="range-slider"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={volume}
+                      onChange={(e) => setVolume(Number(e.target.value))}
+                    />
+                  </div>
                 </div>
 
                 <div className="form-group" style={{ marginTop: '8px', marginBottom: '14px' }}>
@@ -976,39 +1071,45 @@ export function Sidebar({
                     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
                       <div className="form-group">
                         <label className="form-label">Vị trí Y: {tempDefaultConfig.y}%</label>
-                        <input
-                          type="range"
-                          className="range-slider"
-                          min="5"
-                          max="95"
-                          value={tempDefaultConfig.y || 18}
-                          onChange={(e) => setTempDefaultConfig({ ...tempDefaultConfig, y: Number(e.target.value) })}
-                        />
+                        <div className="range-slider-container">
+                          <input
+                            type="range"
+                            className="range-slider"
+                            min="5"
+                            max="95"
+                            value={tempDefaultConfig.y || 18}
+                            onChange={(e) => setTempDefaultConfig({ ...tempDefaultConfig, y: Number(e.target.value) })}
+                          />
+                        </div>
                       </div>
                       <div className="form-group">
                         <label className="form-label">Vị trí X: {tempDefaultConfig.x}%</label>
-                        <input
-                          type="range"
-                          className="range-slider"
-                          min="5"
-                          max="95"
-                          value={tempDefaultConfig.x || 50}
-                          onChange={(e) => setTempDefaultConfig({ ...tempDefaultConfig, x: Number(e.target.value) })}
-                        />
+                        <div className="range-slider-container">
+                          <input
+                            type="range"
+                            className="range-slider"
+                            min="5"
+                            max="95"
+                            value={tempDefaultConfig.x || 50}
+                            onChange={(e) => setTempDefaultConfig({ ...tempDefaultConfig, x: Number(e.target.value) })}
+                          />
+                        </div>
                       </div>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
                       <div className="form-group">
                         <label className="form-label">Cỡ chữ: {tempDefaultConfig.fontSize}px</label>
-                        <input
-                          type="range"
-                          className="range-slider"
-                          min="14"
-                          max="120"
-                          value={tempDefaultConfig.fontSize || 36}
-                          onChange={(e) => setTempDefaultConfig({ ...tempDefaultConfig, fontSize: Number(e.target.value) })}
-                        />
+                        <div className="range-slider-container">
+                          <input
+                            type="range"
+                            className="range-slider"
+                            min="14"
+                            max="120"
+                            value={tempDefaultConfig.fontSize || 36}
+                            onChange={(e) => setTempDefaultConfig({ ...tempDefaultConfig, fontSize: Number(e.target.value) })}
+                          />
+                        </div>
                       </div>
 
                       <div className="form-group">
@@ -1068,6 +1169,46 @@ export function Sidebar({
                         </div>
                       </div>
                     </div>
+
+                    {/* System Default Video Overlay Configuration Card */}
+                    {tempOverlayConfig && (
+                      <div style={{ borderTop: '1px dashed var(--border-color)', paddingTop: '10px', marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ fontSize: '0.85rem', fontWeight: '800', color: '#06b6d4', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span>🎬 Cấu Hình Overlay Video Mặc Định</span>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
+                          <div className="form-group">
+                            <label className="form-label">Size Rộng: {tempOverlayConfig.width || 80}%</label>
+                            <div className="range-slider-container">
+                              <input
+                                type="range"
+                                className="range-slider"
+                                min="10"
+                                max="100"
+                                value={tempOverlayConfig.width || 80}
+                                onChange={(e) => setTempOverlayConfig({ ...tempOverlayConfig, width: Number(e.target.value) })}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="form-group">
+                            <label className="form-label">Độ Mờ: {Math.round((tempOverlayConfig.opacity ?? 1) * 100)}%</label>
+                            <div className="range-slider-container">
+                              <input
+                                type="range"
+                                className="range-slider"
+                                min="0.1"
+                                max="1"
+                                step="0.05"
+                                value={tempOverlayConfig.opacity ?? 1}
+                                onChange={(e) => setTempOverlayConfig({ ...tempOverlayConfig, opacity: Number(e.target.value) })}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Explicit Save Button */}
                     <button

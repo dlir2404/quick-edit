@@ -125,9 +125,6 @@ export function VideoCanvas({
 
         // Render Video Overlay Layers (Picture-In-Picture / Watermark Video)
         (overlayLayers || []).forEach((overlay) => {
-          if (!overlay.visible) return;
-          if (currSec < overlay.startTime || currSec > overlay.endTime) return;
-
           let vEl = overlayVideoRefs.current.get(overlay.id);
           if (!vEl) {
             vEl = document.createElement('video');
@@ -143,10 +140,29 @@ export function VideoCanvas({
             overlayVideoRefs.current.set(overlay.id, vEl);
           }
 
+          const isActive = overlay.visible && currSec >= overlay.startTime && currSec <= overlay.endTime;
+
+          if (!isActive) {
+            if (vEl && !vEl.paused) vEl.pause();
+            return;
+          }
+
           if (vEl) {
             const relTime = Math.max(0.05, currSec - overlay.startTime);
-            if (Math.abs(vEl.currentTime - relTime) > 0.15 && isFinite(relTime) && relTime >= 0) {
-              vEl.currentTime = relTime;
+            vEl.playbackRate = video.playbackRate || 1.0;
+
+            if (isPlaying) {
+              if (vEl.paused) {
+                vEl.currentTime = relTime;
+                vEl.play().catch(() => {});
+              } else if (Math.abs(vEl.currentTime - relTime) > 0.3) {
+                vEl.currentTime = relTime;
+              }
+            } else {
+              if (!vEl.paused) vEl.pause();
+              if (Math.abs(vEl.currentTime - relTime) > 0.05) {
+                vEl.currentTime = relTime;
+              }
             }
 
             const vW = vEl.videoWidth || 1280;
