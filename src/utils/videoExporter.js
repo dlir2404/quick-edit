@@ -3,12 +3,14 @@
  */
 export async function exportVideoClientSide({
   videoElement,
+  videoClips = [],
+  overlayLayers = [],
   crop,
-  textLayers,
+  textLayers = [],
   qualityResolution = { width: 1280, height: 720 },
   onProgress,
 }) {
-  return new Promise(async (resolve, reject) => {
+  return new Promise((resolve, reject) => {
     try {
       const origWidth = videoElement.videoWidth || 1280;
       const origHeight = videoElement.videoHeight || 720;
@@ -79,9 +81,19 @@ export async function exportVideoClientSide({
         resolve({ url, mimeType, blob });
       };
 
+      // Prepare overlay video elements for export
+      const overlayVideoElements = new Map();
+      (overlayLayers || []).forEach((overlay) => {
+        const vEl = document.createElement('video');
+        vEl.src = overlay.url;
+        vEl.muted = true;
+        vEl.playsInline = true;
+        vEl.crossOrigin = 'anonymous';
+        overlayVideoElements.set(overlay.id, vEl);
+      });
+
       const wasPaused = videoElement.paused;
       videoElement.currentTime = 0;
-      await new Promise((r) => setTimeout(r, 150));
 
       recorder.start();
       videoElement.play();
@@ -97,18 +109,46 @@ export async function exportVideoClientSide({
         ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
 
-        // Draw cropped video frame
-        ctx.drawImage(
-          videoElement,
-          cropX,
-          cropY,
-          cropW,
-          cropH,
-          0,
-          0,
-          exportCanvas.width,
-          exportCanvas.height
-        );
+        // Draw cropped base video frame
+        try {
+          ctx.drawImage(
+            videoElement,
+            cropX,
+            cropY,
+            cropW,
+            cropH,
+            0,
+            0,
+            exportCanvas.width,
+            exportCanvas.height
+          );
+        } catch (e) {}
+
+        // Render Video Overlay Layers during export
+        (overlayLayers || []).forEach((overlay) => {
+          if (!overlay.visible) return;
+          if (currentTime < overlay.startTime || currentTime > overlay.endTime) return;
+
+          const vEl = overlayVideoElements.get(overlay.id);
+          if (vEl && vEl.readyState >= 1) {
+            const relTime = currentTime - overlay.startTime;
+            if (Math.abs(vEl.currentTime - relTime) > 0.15 && isFinite(relTime) && relTime >= 0) {
+              vEl.currentTime = relTime;
+            }
+
+            const ovWidth = (overlay.width / 100) * exportCanvas.width;
+            const ovHeight = ovWidth * ((vEl.videoHeight || 720) / (vEl.videoWidth || 1280));
+            const ovX = (overlay.x / 100) * exportCanvas.width - ovWidth / 2;
+            const ovY = (overlay.y / 100) * exportCanvas.height - ovHeight / 2;
+
+            ctx.save();
+            ctx.globalAlpha = overlay.opacity !== undefined ? overlay.opacity : 1;
+            try {
+              ctx.drawImage(vEl, ovX, ovY, ovWidth, ovHeight);
+            } catch (e) {}
+            ctx.restore();
+          }
+        });
 
         // Draw text layers (supporting multiline text)
         textLayers.forEach((layer) => {

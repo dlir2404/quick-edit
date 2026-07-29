@@ -9,6 +9,54 @@ import { exportVideoClientSide } from './utils/videoExporter';
 import { generateVideoFilmstrip } from './utils/filmstripGenerator';
 import { fetchTikTokVideo } from './utils/tiktokLoader';
 
+// Helper to calculate effective clip duration after trimming
+export function getEffectiveClipDuration(clip) {
+  if (!clip) return 0;
+  const dur = clip.duration || 0;
+  const tStart = clip.trimStart || 0;
+  const tEnd = clip.trimEnd || 0;
+  return Math.max(0.2, Number((dur - tStart - tEnd).toFixed(1)));
+}
+
+// Helper to calculate total merged duration
+export function calculateTotalClipsDuration(videoClips = []) {
+  if (!videoClips || videoClips.length === 0) return 0;
+  return Number(videoClips.reduce((acc, c) => acc + getEffectiveClipDuration(c), 0).toFixed(1));
+}
+
+// Helper to calculate active clip in sequence
+export function getActiveClipForTime(globalTime, videoClips = []) {
+  if (!videoClips || videoClips.length === 0) {
+    return { clipIndex: 0, clipOffset: globalTime, localSeekTime: globalTime, clip: null, accumulatedStart: 0, effDur: 10 };
+  }
+  let accumulatedStart = 0;
+  for (let i = 0; i < videoClips.length; i++) {
+    const effDur = getEffectiveClipDuration(videoClips[i]);
+    if (globalTime < accumulatedStart + effDur || i === videoClips.length - 1) {
+      const offsetInClip = Math.max(0, globalTime - accumulatedStart);
+      const localSeekTime = (videoClips[i].trimStart || 0) + offsetInClip;
+      return {
+        clipIndex: i,
+        clipOffset: offsetInClip,
+        localSeekTime: Number(localSeekTime.toFixed(2)),
+        clip: videoClips[i],
+        accumulatedStart,
+        effDur,
+      };
+    }
+    accumulatedStart += effDur;
+  }
+  const firstEff = getEffectiveClipDuration(videoClips[0]);
+  return {
+    clipIndex: 0,
+    clipOffset: 0,
+    localSeekTime: videoClips[0]?.trimStart || 0,
+    clip: videoClips[0],
+    accumulatedStart: 0,
+    effDur: firstEff,
+  };
+}
+
 export function App() {
   const videoRef = useRef(null);
 
@@ -70,6 +118,13 @@ export function App() {
   const [filmstripThumbs, setFilmstripThumbs] = useState([]);
   const [isTikTokLoading, setIsTikTokLoading] = useState(false);
 
+  // Video Clips State (Merge Video Sequence)
+  const [videoClips, setVideoClips] = useState([]);
+
+  // Video Overlay Layers State (Picture-in-Picture / Watermark Video)
+  const [overlayLayers, setOverlayLayers] = useState([]);
+  const [selectedOverlayId, setSelectedOverlayId] = useState(null);
+
   // Crop State
   const [crop, setCrop] = useState({
     x: 0,
@@ -91,6 +146,15 @@ export function App() {
   // Sync real video duration from mounted video element
   const handleDurationChange = (realDur) => {
     if (!realDur || !isFinite(realDur) || realDur <= 0) return;
+
+    if (videoClips && videoClips.length > 0) {
+      const totalClipsDur = Number(videoClips.reduce((acc, c) => acc + (c.duration || 0), 0).toFixed(1));
+      if (totalClipsDur > 0) {
+        setDuration(totalClipsDur);
+        return;
+      }
+    }
+
     const roundedDur = Number(realDur.toFixed(1));
 
     setDuration((prev) => {
@@ -129,7 +193,7 @@ export function App() {
     };
   };
 
-  // Handle Video File Selection
+  // Handle Video File Selection (Primary Video)
   const handleFileSelect = async (file) => {
     if (!file) return;
     const url = URL.createObjectURL(file);
@@ -142,7 +206,17 @@ export function App() {
         : 10;
       const roundedDur = Number(dur.toFixed(1));
 
+      const firstClip = {
+        id: `clip-${Date.now()}`,
+        name: file.name,
+        url,
+        duration: roundedDur,
+        width: videoObj.videoWidth,
+        height: videoObj.videoHeight,
+      };
+
       setVideoSrc(url);
+      setVideoClips([firstClip]);
       setVideoData({
         name: file.name,
         width: videoObj.videoWidth,
@@ -171,6 +245,136 @@ export function App() {
     };
   };
 
+  // Append a secondary video clip (Merge Video Sequence)
+  const handleAppendVideoClip = (file) => {
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    const videoObj = document.createElement('video');
+    videoObj.src = url;
+
+    videoObj.onloadedmetadata = () => {
+      const dur = (videoObj.duration && isFinite(videoObj.duration) && videoObj.duration > 0)
+        ? videoObj.duration
+        : 5;
+      const roundedDur = Number(dur.toFixed(1));
+
+      const newClip = {
+        id: `clip-${Date.now()}`,
+        name: file.name,
+        url,
+        duration: roundedDur,
+        width: videoObj.videoWidth,
+        height: videoObj.videoHeight,
+      };
+
+      setVideoClips((prev) => {
+        const nextClips = [...prev, newClip];
+        const newTotalDur = Number(nextClips.reduce((acc, c) => acc + c.duration, 0).toFixed(1));
+        setDuration(newTotalDur);
+        return nextClips;
+      });
+    };
+  };
+
+  // Remove a merged video clip
+  const handleRemoveVideoClip = (id) => {
+    setVideoClips((prev) => {
+      const nextClips = prev.filter((c) => c.id !== id);
+      if (nextClips.length > 0) {
+        setVideoSrc(nextClips[0].url);
+        const newTotalDur = Number(nextClips.reduce((acc, c) => acc + c.duration, 0).toFixed(1));
+        setDuration(newTotalDur);
+      } else {
+        handleReset();
+      }
+      return nextClips;
+    });
+  };
+
+  // Update a video clip (e.g. trimStart, trimEnd)
+  const handleUpdateVideoClip = (id, updates) => {
+    setVideoClips((prev) => {
+      const nextClips = prev.map((c) => (c.id === id ? { ...c, ...updates } : c));
+      const newTotalDur = calculateTotalClipsDuration(nextClips);
+      if (newTotalDur > 0) setDuration(newTotalDur);
+      return nextClips;
+    });
+  };
+
+  // Reorder video clips (move up / move down)
+  const handleReorderVideoClip = (index, direction) => {
+    setVideoClips((prev) => {
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const nextClips = [...prev];
+      const temp = nextClips[index];
+      nextClips[index] = nextClips[targetIndex];
+      nextClips[targetIndex] = temp;
+      setVideoSrc(nextClips[0].url);
+      return nextClips;
+    });
+  };
+
+  // Swap video clips (Drag-and-drop reorder on Timeline)
+  const handleSwapVideoClips = (fromIndex, toIndex) => {
+    setVideoClips((prev) => {
+      if (fromIndex < 0 || fromIndex >= prev.length || toIndex < 0 || toIndex >= prev.length) return prev;
+      if (fromIndex === toIndex) return prev;
+      const nextClips = [...prev];
+      const [moved] = nextClips.splice(fromIndex, 1);
+      nextClips.splice(toIndex, 0, moved);
+      if (nextClips.length > 0) setVideoSrc(nextClips[0].url);
+      return nextClips;
+    });
+  };
+
+  // Add a Video Overlay Layer (Picture-in-Picture / Watermark Video)
+  const handleAddOverlay = (file) => {
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    const videoObj = document.createElement('video');
+    videoObj.src = url;
+
+    videoObj.onloadedmetadata = () => {
+      const dur = (videoObj.duration && isFinite(videoObj.duration) && videoObj.duration > 0)
+        ? videoObj.duration
+        : 5;
+      const roundedDur = Number(dur.toFixed(1));
+
+      const newOverlayId = `overlay-${Date.now()}`;
+      const newOverlay = {
+        id: newOverlayId,
+        name: file.name,
+        url,
+        x: 50,
+        y: 50,
+        width: 80,
+        height: 80,
+        opacity: 0.9,
+        startTime: 0,
+        endTime: Math.min(roundedDur, duration || 10),
+        volume: 0,
+        visible: true,
+      };
+
+      setOverlayLayers((prev) => [...prev, newOverlay]);
+      setSelectedOverlayId(newOverlayId);
+      setActiveTab('overlay');
+      setIsDrawerOpen(true);
+    };
+  };
+
+  const handleUpdateOverlay = (id, updates) => {
+    setOverlayLayers((prev) =>
+      prev.map((layer) => (layer.id === id ? { ...layer, ...updates } : layer))
+    );
+  };
+
+  const handleDeleteOverlay = (id) => {
+    setOverlayLayers((prev) => prev.filter((layer) => layer.id !== id));
+    if (selectedOverlayId === id) setSelectedOverlayId(null);
+  };
+
   // Handle Fetch TikTok Video by URL
   const handleTikTokSubmit = async (url) => {
     if (!url) return;
@@ -180,7 +384,17 @@ export function App() {
       const data = await fetchTikTokVideo(url);
       const initialDur = data.duration || 10;
 
+      const firstClip = {
+        id: `clip-tiktok-${Date.now()}`,
+        name: data.title || 'TikTok Video',
+        url: data.url,
+        duration: initialDur,
+        width: 720,
+        height: 1280,
+      };
+
       setVideoSrc(data.url);
+      setVideoClips([firstClip]);
       setVideoData({
         name: data.title || 'TikTok Video',
         width: 720,
@@ -216,7 +430,17 @@ export function App() {
   // Handle Load Sample Video
   const handleLoadSample = async () => {
     const sample = await generateSampleVideo();
+    const firstClip = {
+      id: `clip-sample-${Date.now()}`,
+      name: sample.name,
+      url: sample.url,
+      duration: sample.duration,
+      width: sample.width,
+      height: sample.height,
+    };
+
     setVideoSrc(sample.url);
+    setVideoClips([firstClip]);
     setVideoData({
       name: sample.name,
       width: sample.width,
@@ -247,6 +471,9 @@ export function App() {
   // Reset project
   const handleReset = () => {
     setVideoSrc(null);
+    setVideoClips([]);
+    setOverlayLayers([]);
+    setSelectedOverlayId(null);
     setVideoData(null);
     setTextLayers([]);
     setSelectedTextId(null);
@@ -286,11 +513,29 @@ export function App() {
     }
   };
 
+
   // Seek time
   const handleSeek = (newTime) => {
-    if (videoRef.current) {
+    setCurrentTime(newTime);
+
+    if (!videoRef.current) return;
+    if (videoClips && videoClips.length > 0) {
+      const activeInfo = getActiveClipForTime(newTime, videoClips);
+      if (activeInfo.clip && activeInfo.clip.url) {
+        if (videoRef.current.src !== activeInfo.clip.url) {
+          videoRef.current.src = activeInfo.clip.url;
+          videoRef.current.onloadedmetadata = () => {
+            if (videoRef.current) {
+              videoRef.current.currentTime = activeInfo.clipOffset;
+              if (isPlaying) videoRef.current.play().catch(() => {});
+            }
+          };
+        } else {
+          videoRef.current.currentTime = activeInfo.clipOffset;
+        }
+      }
+    } else {
       videoRef.current.currentTime = newTime;
-      setCurrentTime(newTime);
     }
   };
 
@@ -310,6 +555,8 @@ export function App() {
     try {
       const result = await exportVideoClientSide({
         videoElement: videoRef.current,
+        videoClips,
+        overlayLayers,
         crop,
         textLayers,
         qualityResolution: {
@@ -354,6 +601,16 @@ export function App() {
           videoData={videoData}
           onFileSelect={handleFileSelect}
           onLoadSample={handleLoadSample}
+          videoClips={videoClips}
+          onAppendVideoClip={handleAppendVideoClip}
+          onRemoveVideoClip={handleRemoveVideoClip}
+          onReorderVideoClip={handleReorderVideoClip}
+          overlayLayers={overlayLayers}
+          selectedOverlayId={selectedOverlayId}
+          setSelectedOverlayId={setSelectedOverlayId}
+          onAddOverlay={handleAddOverlay}
+          onUpdateOverlay={handleUpdateOverlay}
+          onDeleteOverlay={handleDeleteOverlay}
           crop={crop}
           setCrop={setCrop}
           textLayers={textLayers}
@@ -375,6 +632,11 @@ export function App() {
         <VideoCanvas
           videoRef={videoRef}
           videoSrc={videoSrc}
+          videoClips={videoClips}
+          overlayLayers={overlayLayers}
+          selectedOverlayId={selectedOverlayId}
+          setSelectedOverlayId={setSelectedOverlayId}
+          onUpdateOverlay={handleUpdateOverlay}
           currentTime={currentTime}
           setCurrentTime={setCurrentTime}
           duration={duration}
@@ -406,6 +668,13 @@ export function App() {
         selectedTextId={selectedTextId}
         setSelectedTextId={setSelectedTextId}
         onUpdateText={handleUpdateText}
+        videoClips={videoClips}
+        onUpdateVideoClip={handleUpdateVideoClip}
+        onSwapVideoClips={handleSwapVideoClips}
+        overlayLayers={overlayLayers}
+        selectedOverlayId={selectedOverlayId}
+        setSelectedOverlayId={setSelectedOverlayId}
+        onUpdateOverlay={handleUpdateOverlay}
         filmstripThumbs={filmstripThumbs}
       />
 

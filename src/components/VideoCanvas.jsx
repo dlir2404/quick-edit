@@ -4,6 +4,11 @@ import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Maximize, Upload,
 export function VideoCanvas({
   videoRef,
   videoSrc,
+  videoClips = [],
+  overlayLayers = [],
+  selectedOverlayId,
+  setSelectedOverlayId,
+  onUpdateOverlay,
   currentTime,
   setCurrentTime,
   duration,
@@ -82,6 +87,8 @@ export function VideoCanvas({
     return () => window.removeEventListener('paste', handleGlobalPaste);
   }, [videoSrc, onTikTokSubmit]);
 
+  const overlayVideoRefs = useRef(new Map());
+
   // Main canvas render loop
   useEffect(() => {
     let animId;
@@ -114,6 +121,78 @@ export function VideoCanvas({
         }
 
         const currSec = video.currentTime;
+
+        // Render Video Overlay Layers (Picture-In-Picture / Watermark Video)
+        (overlayLayers || []).forEach((overlay) => {
+          if (!overlay.visible) return;
+          if (currSec < overlay.startTime || currSec > overlay.endTime) return;
+
+          let vEl = overlayVideoRefs.current.get(overlay.id);
+          if (!vEl) {
+            vEl = document.createElement('video');
+            vEl.src = overlay.url;
+            vEl.muted = true;
+            vEl.playsInline = true;
+            vEl.crossOrigin = 'anonymous';
+            vEl.preload = 'auto';
+            vEl.onloadedmetadata = () => {
+              if (vEl.currentTime === 0) vEl.currentTime = 0.05;
+            };
+            vEl.currentTime = 0.05;
+            overlayVideoRefs.current.set(overlay.id, vEl);
+          }
+
+          if (vEl) {
+            const relTime = Math.max(0.05, currSec - overlay.startTime);
+            if (Math.abs(vEl.currentTime - relTime) > 0.15 && isFinite(relTime) && relTime >= 0) {
+              vEl.currentTime = relTime;
+            }
+
+            const vW = vEl.videoWidth || 1280;
+            const vH = vEl.videoHeight || 720;
+            const ovWidth = (overlay.width / 100) * canvas.width;
+            const ovHeight = ovWidth * (vH / vW);
+            const ovX = (overlay.x / 100) * canvas.width - ovWidth / 2;
+            const ovY = (overlay.y / 100) * canvas.height - ovHeight / 2;
+
+            ctx.save();
+            ctx.globalAlpha = overlay.opacity !== undefined ? overlay.opacity : 1;
+            try {
+              ctx.drawImage(vEl, ovX, ovY, ovWidth, ovHeight);
+            } catch (e) {}
+
+            if (overlay.id === selectedOverlayId) {
+              ctx.save();
+              ctx.strokeStyle = '#06b6d4';
+              ctx.lineWidth = Math.max(2, canvas.height / 350);
+              ctx.setLineDash([6, 4]);
+              ctx.strokeRect(ovX, ovY, ovWidth, ovHeight);
+              ctx.setLineDash([]);
+
+              const radius = Math.max(6, ovWidth * 0.03);
+              const corners = [
+                { x: ovX, y: ovY },
+                { x: ovX + ovWidth, y: ovY },
+                { x: ovX, y: ovY + ovHeight },
+                { x: ovX + ovWidth, y: ovY + ovHeight },
+              ];
+
+              corners.forEach((c) => {
+                ctx.beginPath();
+                ctx.arc(c.x, c.y, radius, 0, Math.PI * 2);
+                ctx.fillStyle = '#06b6d4';
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+              });
+              ctx.restore();
+            }
+            ctx.restore();
+          }
+        });
+
+        // Render Text Layers
         textLayers.forEach((layer) => {
           if (!layer.visible) return;
           if (currSec < layer.startTime || currSec > layer.endTime) return;
@@ -219,7 +298,36 @@ export function VideoCanvas({
           ctx.restore();
         });
 
-        setCurrentTime(video.currentTime);
+        if (videoClips && videoClips.length > 1) {
+          let accumulatedStart = 0;
+          let activeClipIndex = 0;
+          for (let i = 0; i < videoClips.length; i++) {
+            const clipDur = videoClips[i].duration || 0;
+            if (currentTime < accumulatedStart + clipDur || i === videoClips.length - 1) {
+              activeClipIndex = i;
+              break;
+            }
+            accumulatedStart += clipDur;
+          }
+
+          const currentGlobalTime = accumulatedStart + video.currentTime;
+          setCurrentTime(Number(currentGlobalTime.toFixed(1)));
+
+          const activeClip = videoClips[activeClipIndex];
+          if (isPlaying && (video.ended || video.currentTime >= (activeClip?.duration || 10) - 0.08)) {
+            if (activeClipIndex < videoClips.length - 1) {
+              const nextClip = videoClips[activeClipIndex + 1];
+              video.src = nextClip.url;
+              video.currentTime = 0.05;
+              video.play().catch(() => {});
+            } else {
+              video.pause();
+              setIsPlaying(false);
+            }
+          }
+        } else {
+          setCurrentTime(video.currentTime);
+        }
       }
 
       animId = requestAnimationFrame(renderFrame);
@@ -228,7 +336,9 @@ export function VideoCanvas({
     renderFrame();
 
     return () => cancelAnimationFrame(animId);
-  }, [crop, textLayers, selectedTextId]);
+  }, [crop, textLayers, selectedTextId, overlayLayers, selectedOverlayId, currentTime, videoClips, isPlaying]);
+
+  const [dragTarget, setDragTarget] = useState('text'); // 'text' | 'overlay'
 
   const togglePlay = () => {
     if (!videoRef.current) return;
@@ -236,7 +346,34 @@ export function VideoCanvas({
       videoRef.current.pause();
       setIsPlaying(false);
     } else {
-      videoRef.current.play();
+      if (videoClips && videoClips.length > 1) {
+        let accumulatedStart = 0;
+        let activeClip = videoClips[0];
+        let activeClipOffset = currentTime;
+
+        for (let i = 0; i < videoClips.length; i++) {
+          const clipDur = videoClips[i].duration || 0;
+          if (currentTime < accumulatedStart + clipDur || i === videoClips.length - 1) {
+            activeClip = videoClips[i];
+            activeClipOffset = Math.max(0, currentTime - accumulatedStart);
+            break;
+          }
+          accumulatedStart += clipDur;
+        }
+
+        if (activeClip && activeClip.url && videoRef.current.src !== activeClip.url) {
+          videoRef.current.src = activeClip.url;
+          videoRef.current.onloadedmetadata = () => {
+            if (videoRef.current) {
+              videoRef.current.currentTime = activeClipOffset;
+              videoRef.current.play().catch(() => {});
+              setIsPlaying(true);
+            }
+          };
+          return;
+        }
+      }
+      videoRef.current.play().catch(() => {});
       setIsPlaying(true);
     }
   };
@@ -259,7 +396,64 @@ export function VideoCanvas({
 
     const mouseCanvasX = (clientX - rect.left) * (canvas.width / rect.width);
     const mouseCanvasY = (clientY - rect.top) * (canvas.height / rect.height);
+    const currSec = videoRef.current ? videoRef.current.currentTime : 0;
 
+    // 1. Check Selected Video Overlay Layer
+    const selectedOverlay = (overlayLayers || []).find((o) => o.id === selectedOverlayId);
+    if (selectedOverlay && selectedOverlay.visible && currSec >= selectedOverlay.startTime && currSec <= selectedOverlay.endTime) {
+      const vEl = overlayVideoRefs.current.get(selectedOverlay.id);
+      const aspect = vEl && vEl.videoWidth && vEl.videoHeight ? vEl.videoHeight / vEl.videoWidth : 0.5625;
+      const ovWidth = (selectedOverlay.width / 100) * canvas.width;
+      const ovHeight = ovWidth * aspect;
+      const ovX = (selectedOverlay.x / 100) * canvas.width - ovWidth / 2;
+      const ovY = (selectedOverlay.y / 100) * canvas.height - ovHeight / 2;
+
+      const corners = [
+        { x: ovX, y: ovY },
+        { x: ovX + ovWidth, y: ovY },
+        { x: ovX, y: ovY + ovHeight },
+        { x: ovX + ovWidth, y: ovY + ovHeight },
+      ];
+
+      const hitRadius = Math.max(24, ovWidth * 0.15);
+      const isCornerHit = corners.some((c) => {
+        const dx = mouseCanvasX - c.x;
+        const dy = mouseCanvasY - c.y;
+        return Math.sqrt(dx * dx + dy * dy) <= hitRadius;
+      });
+
+      if (isCornerHit) {
+        if (e.cancelable && e.type.startsWith('touch')) e.preventDefault();
+        if (e.stopPropagation) e.stopPropagation();
+        setDragTarget('overlay');
+        setDragMode('resize');
+        setDragStart({
+          x: clientX,
+          y: clientY,
+          initialX: selectedOverlay.x,
+          initialY: selectedOverlay.y,
+          initialWidth: selectedOverlay.width,
+        });
+        return;
+      }
+
+      if (mouseCanvasX >= ovX && mouseCanvasX <= ovX + ovWidth && mouseCanvasY >= ovY && mouseCanvasY <= ovY + ovHeight) {
+        if (e.cancelable && e.type.startsWith('touch')) e.preventDefault();
+        if (e.stopPropagation) e.stopPropagation();
+        setDragTarget('overlay');
+        setDragMode('move');
+        setDragStart({
+          x: clientX,
+          y: clientY,
+          initialX: selectedOverlay.x,
+          initialY: selectedOverlay.y,
+          initialWidth: selectedOverlay.width,
+        });
+        return;
+      }
+    }
+
+    // 2. Check Selected Text Layer
     const selectedLayer = textLayers.find((t) => t.id === selectedTextId);
     if (selectedLayer && selectedLayer.visible) {
       const posX = (selectedLayer.x / 100) * canvas.width;
@@ -312,6 +506,7 @@ export function VideoCanvas({
       if (isCornerHit) {
         if (e.cancelable && e.type.startsWith('touch')) e.preventDefault();
         if (e.stopPropagation) e.stopPropagation();
+        setDragTarget('text');
         setDragMode('resize');
         setDragStart({
           x: clientX,
@@ -331,6 +526,7 @@ export function VideoCanvas({
       ) {
         if (e.cancelable && e.type.startsWith('touch')) e.preventDefault();
         if (e.stopPropagation) e.stopPropagation();
+        setDragTarget('text');
         setDragMode('move');
         setDragStart({
           x: clientX,
@@ -343,6 +539,41 @@ export function VideoCanvas({
       }
     }
 
+    // 3. Search for any visible Overlay Layer hit
+    let foundOverlay = null;
+    for (let i = (overlayLayers || []).length - 1; i >= 0; i--) {
+      const overlay = overlayLayers[i];
+      if (!overlay.visible || currSec < overlay.startTime || currSec > overlay.endTime) continue;
+
+      const vEl = overlayVideoRefs.current.get(overlay.id);
+      const aspect = vEl && vEl.videoWidth && vEl.videoHeight ? vEl.videoHeight / vEl.videoWidth : 0.5625;
+      const ovWidth = (overlay.width / 100) * canvas.width;
+      const ovHeight = ovWidth * aspect;
+      const ovX = (overlay.x / 100) * canvas.width - ovWidth / 2;
+      const ovY = (overlay.y / 100) * canvas.height - ovHeight / 2;
+
+      if (mouseCanvasX >= ovX && mouseCanvasX <= ovX + ovWidth && mouseCanvasY >= ovY && mouseCanvasY <= ovY + ovHeight) {
+        foundOverlay = overlay;
+        break;
+      }
+    }
+
+    if (foundOverlay) {
+      if (e.cancelable && e.type.startsWith('touch')) e.preventDefault();
+      if (setSelectedOverlayId) setSelectedOverlayId(foundOverlay.id);
+      setDragTarget('overlay');
+      setDragMode('move');
+      setDragStart({
+        x: clientX,
+        y: clientY,
+        initialX: foundOverlay.x,
+        initialY: foundOverlay.y,
+        initialWidth: foundOverlay.width,
+      });
+      return;
+    }
+
+    // 4. Search for any Text Layer hit
     let foundLayer = null;
     const ctx = canvas.getContext('2d');
     for (let i = textLayers.length - 1; i >= 0; i--) {
@@ -388,6 +619,7 @@ export function VideoCanvas({
     if (foundLayer) {
       if (e.cancelable && e.type.startsWith('touch')) e.preventDefault();
       setSelectedTextId(foundLayer.id);
+      setDragTarget('text');
       setDragMode('move');
       setDragStart({
         x: clientX,
@@ -402,30 +634,52 @@ export function VideoCanvas({
   };
 
   const handleMouseMove = (e) => {
-    if (!dragMode || !selectedTextId) return;
-    const selectedLayer = textLayers.find((t) => t.id === selectedTextId);
-    if (!selectedLayer || !containerRef.current) return;
-
+    if (!dragMode || !containerRef.current) return;
     if (e.cancelable && e.type.startsWith('touch')) e.preventDefault();
     const { clientX, clientY } = getEventCoords(e);
     const rect = containerRef.current.getBoundingClientRect();
 
-    if (dragMode === 'move') {
-      const deltaXPercent = ((clientX - dragStart.x) / rect.width) * 100;
-      const deltaYPercent = ((clientY - dragStart.y) / rect.height) * 100;
+    if (dragTarget === 'overlay') {
+      if (!selectedOverlayId) return;
+      if (dragMode === 'move') {
+        const deltaXPercent = ((clientX - dragStart.x) / rect.width) * 100;
+        const deltaYPercent = ((clientY - dragStart.y) / rect.height) * 100;
 
-      const newX = Math.max(5, Math.min(95, dragStart.initialX + deltaXPercent));
-      const newY = Math.max(5, Math.min(95, dragStart.initialY + deltaYPercent));
+        const newX = Math.max(0, Math.min(100, dragStart.initialX + deltaXPercent));
+        const newY = Math.max(0, Math.min(100, dragStart.initialY + deltaYPercent));
 
-      onUpdateText(selectedTextId, { x: Math.round(newX), y: Math.round(newY) });
-    } else if (dragMode === 'resize') {
-      const deltaX = clientX - dragStart.x;
-      const deltaY = clientY - dragStart.y;
-      const dist = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-      const scaleFactor = deltaX > 0 || deltaY > 0 ? 1 + dist / 180 : 1 - dist / 180;
+        if (onUpdateOverlay) onUpdateOverlay(selectedOverlayId, { x: Math.round(newX), y: Math.round(newY) });
+      } else if (dragMode === 'resize') {
+        const deltaX = clientX - dragStart.x;
+        const deltaY = clientY - dragStart.y;
+        const dist = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        const scaleFactor = deltaX > 0 || deltaY > 0 ? 1 + dist / 180 : 1 - dist / 180;
 
-      const newFontSize = Math.max(14, Math.min(160, Math.round(dragStart.initialFontSize * scaleFactor)));
-      onUpdateText(selectedTextId, { fontSize: newFontSize });
+        const newWidth = Math.max(5, Math.min(100, Math.round(dragStart.initialWidth * scaleFactor)));
+        if (onUpdateOverlay) onUpdateOverlay(selectedOverlayId, { width: newWidth });
+      }
+    } else {
+      if (!selectedTextId) return;
+      const selectedLayer = textLayers.find((t) => t.id === selectedTextId);
+      if (!selectedLayer) return;
+
+      if (dragMode === 'move') {
+        const deltaXPercent = ((clientX - dragStart.x) / rect.width) * 100;
+        const deltaYPercent = ((clientY - dragStart.y) / rect.height) * 100;
+
+        const newX = Math.max(5, Math.min(95, dragStart.initialX + deltaXPercent));
+        const newY = Math.max(5, Math.min(95, dragStart.initialY + deltaYPercent));
+
+        onUpdateText(selectedTextId, { x: Math.round(newX), y: Math.round(newY) });
+      } else if (dragMode === 'resize') {
+        const deltaX = clientX - dragStart.x;
+        const deltaY = clientY - dragStart.y;
+        const dist = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        const scaleFactor = deltaX > 0 || deltaY > 0 ? 1 + dist / 180 : 1 - dist / 180;
+
+        const newFontSize = Math.max(14, Math.min(160, Math.round(dragStart.initialFontSize * scaleFactor)));
+        onUpdateText(selectedTextId, { fontSize: newFontSize });
+      }
     }
   };
 
