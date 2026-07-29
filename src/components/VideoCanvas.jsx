@@ -345,13 +345,25 @@ export function VideoCanvas({
       videoRef.current.pause();
       setIsPlaying(false);
     } else {
+      const totalDur = duration || 10;
+      let targetTime = currentTime;
+      // If at or near the end of timeline, replay from the beginning (0s)
+      if (currentTime >= totalDur - 0.15) {
+        targetTime = 0;
+        setCurrentTime(0);
+      }
+
       if (videoClips && videoClips.length > 0) {
-        const activeInfo = getActiveClipForTime(currentTime, videoClips);
+        const activeInfo = getActiveClipForTime(targetTime, videoClips);
         if (activeInfo.clip && activeInfo.clip.url) {
           switchVideoSource(videoRef.current, activeInfo.clip.url, activeInfo.localSeekTime, true);
           setIsPlaying(true);
           return;
         }
+      }
+
+      if (targetTime === 0) {
+        videoRef.current.currentTime = 0.05;
       }
       videoRef.current.play().catch(() => {});
       setIsPlaying(true);
