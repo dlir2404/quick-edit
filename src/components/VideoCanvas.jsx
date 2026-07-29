@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Maximize, Upload, Sparkles, Link as LinkIcon, Loader2 } from 'lucide-react';
+import { getActiveClipForTime, switchVideoSource } from '../App';
 
 export function VideoCanvas({
   videoRef,
@@ -298,28 +299,26 @@ export function VideoCanvas({
           ctx.restore();
         });
 
-        if (videoClips && videoClips.length > 1) {
-          let accumulatedStart = 0;
-          let activeClipIndex = 0;
-          for (let i = 0; i < videoClips.length; i++) {
-            const clipDur = videoClips[i].duration || 0;
-            if (currentTime < accumulatedStart + clipDur || i === videoClips.length - 1) {
-              activeClipIndex = i;
-              break;
-            }
-            accumulatedStart += clipDur;
-          }
+        if (videoClips && videoClips.length > 0) {
+          const activeInfo = getActiveClipForTime(currentTime, videoClips);
+          const localTime = video.currentTime;
+          const trimStart = activeInfo.clip?.trimStart || 0;
+          const trimEnd = activeInfo.clip?.trimEnd || 0;
+          const origDur = activeInfo.clip?.duration || 10;
+          const maxLocalTime = Math.max(0.1, origDur - trimEnd);
 
-          const currentGlobalTime = accumulatedStart + video.currentTime;
+          const effLocalTime = Math.max(0, localTime - trimStart);
+          const currentGlobalTime = activeInfo.accumulatedStart + effLocalTime;
           setCurrentTime(Number(currentGlobalTime.toFixed(1)));
 
-          const activeClip = videoClips[activeClipIndex];
-          if (isPlaying && (video.ended || video.currentTime >= (activeClip?.duration || 10) - 0.08)) {
-            if (activeClipIndex < videoClips.length - 1) {
-              const nextClip = videoClips[activeClipIndex + 1];
-              video.src = nextClip.url;
-              video.currentTime = 0.05;
-              video.play().catch(() => {});
+          if (isPlaying && (video.ended || localTime >= maxLocalTime - 0.08)) {
+            if (activeInfo.clipIndex < videoClips.length - 1) {
+              const nextGlobalTime = Number((activeInfo.accumulatedStart + activeInfo.effDur + 0.05).toFixed(1));
+              setCurrentTime(nextGlobalTime);
+              const nextInfo = getActiveClipForTime(nextGlobalTime, videoClips);
+              if (nextInfo.clip) {
+                switchVideoSource(video, nextInfo.clip.url, nextInfo.localSeekTime, true);
+              }
             } else {
               video.pause();
               setIsPlaying(false);
@@ -346,30 +345,11 @@ export function VideoCanvas({
       videoRef.current.pause();
       setIsPlaying(false);
     } else {
-      if (videoClips && videoClips.length > 1) {
-        let accumulatedStart = 0;
-        let activeClip = videoClips[0];
-        let activeClipOffset = currentTime;
-
-        for (let i = 0; i < videoClips.length; i++) {
-          const clipDur = videoClips[i].duration || 0;
-          if (currentTime < accumulatedStart + clipDur || i === videoClips.length - 1) {
-            activeClip = videoClips[i];
-            activeClipOffset = Math.max(0, currentTime - accumulatedStart);
-            break;
-          }
-          accumulatedStart += clipDur;
-        }
-
-        if (activeClip && activeClip.url && videoRef.current.src !== activeClip.url) {
-          videoRef.current.src = activeClip.url;
-          videoRef.current.onloadedmetadata = () => {
-            if (videoRef.current) {
-              videoRef.current.currentTime = activeClipOffset;
-              videoRef.current.play().catch(() => {});
-              setIsPlaying(true);
-            }
-          };
+      if (videoClips && videoClips.length > 0) {
+        const activeInfo = getActiveClipForTime(currentTime, videoClips);
+        if (activeInfo.clip && activeInfo.clip.url) {
+          switchVideoSource(videoRef.current, activeInfo.clip.url, activeInfo.localSeekTime, true);
+          setIsPlaying(true);
           return;
         }
       }

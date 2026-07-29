@@ -57,6 +57,44 @@ export function getActiveClipForTime(globalTime, videoClips = []) {
   };
 }
 
+// Robust helper to safely switch video sources and seek after metadata loads
+export function switchVideoSource(videoElement, newUrl, targetLocalTime, shouldPlay = false) {
+  if (!videoElement || !newUrl) return;
+
+  const targetTime = Math.max(0.01, Number(targetLocalTime.toFixed(2)));
+
+  if (videoElement.src === newUrl) {
+    if (videoElement.readyState >= 1) {
+      videoElement.currentTime = targetTime;
+      if (shouldPlay) videoElement.play().catch(() => {});
+    } else {
+      const onReady = () => {
+        videoElement.removeEventListener('loadedmetadata', onReady);
+        videoElement.currentTime = targetTime;
+        if (shouldPlay) videoElement.play().catch(() => {});
+      };
+      videoElement.addEventListener('loadedmetadata', onReady);
+    }
+    return;
+  }
+
+  const onMeta = () => {
+    videoElement.removeEventListener('loadedmetadata', onMeta);
+    videoElement.removeEventListener('loadeddata', onMeta);
+    try {
+      videoElement.currentTime = targetTime;
+    } catch (e) {}
+    if (shouldPlay) {
+      videoElement.play().catch(() => {});
+    }
+  };
+
+  videoElement.addEventListener('loadedmetadata', onMeta);
+  videoElement.addEventListener('loadeddata', onMeta);
+  videoElement.src = newUrl;
+  videoElement.load();
+}
+
 export function App() {
   const videoRef = useRef(null);
 
@@ -516,26 +554,18 @@ export function App() {
 
   // Seek time
   const handleSeek = (newTime) => {
-    setCurrentTime(newTime);
+    const totalDur = duration || 10;
+    const clampedTime = Math.max(0, Math.min(totalDur, newTime));
+    setCurrentTime(clampedTime);
 
     if (!videoRef.current) return;
     if (videoClips && videoClips.length > 0) {
-      const activeInfo = getActiveClipForTime(newTime, videoClips);
+      const activeInfo = getActiveClipForTime(clampedTime, videoClips);
       if (activeInfo.clip && activeInfo.clip.url) {
-        if (videoRef.current.src !== activeInfo.clip.url) {
-          videoRef.current.src = activeInfo.clip.url;
-          videoRef.current.onloadedmetadata = () => {
-            if (videoRef.current) {
-              videoRef.current.currentTime = activeInfo.clipOffset;
-              if (isPlaying) videoRef.current.play().catch(() => {});
-            }
-          };
-        } else {
-          videoRef.current.currentTime = activeInfo.clipOffset;
-        }
+        switchVideoSource(videoRef.current, activeInfo.clip.url, activeInfo.localSeekTime, isPlaying);
       }
     } else {
-      videoRef.current.currentTime = newTime;
+      videoRef.current.currentTime = clampedTime;
     }
   };
 
@@ -582,6 +612,9 @@ export function App() {
       setIsExporting(false);
     }
   };
+
+  const activeClipInfo = getActiveClipForTime(currentTime, videoClips);
+  const activeVideoSrc = activeClipInfo.clip ? activeClipInfo.clip.url : videoSrc;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100vw', overflow: 'hidden' }}>
@@ -631,7 +664,7 @@ export function App() {
 
         <VideoCanvas
           videoRef={videoRef}
-          videoSrc={videoSrc}
+          videoSrc={activeVideoSrc}
           videoClips={videoClips}
           overlayLayers={overlayLayers}
           selectedOverlayId={selectedOverlayId}
