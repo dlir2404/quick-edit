@@ -52,17 +52,18 @@ export async function exportVideoClientSide({
       }
       const combinedStream = new MediaStream(tracks);
 
-      // MimeType selection
-      let mimeType = 'video/webm;codecs=vp9,opus';
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'video/webm;codecs=vp8';
-      }
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'video/webm';
-      }
-      if (MediaRecorder.isTypeSupported('video/mp4')) {
-        mimeType = 'video/mp4';
-      }
+      // Preferred MIME types for maximum iOS / QuickTime / AirDrop / Photos Album compatibility
+      const preferredMimeTypes = [
+        'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+        'video/mp4;codecs=avc1,mp4a.40.2',
+        'video/mp4;codecs=h264,aac',
+        'video/mp4',
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/webm',
+      ];
+
+      const mimeType = preferredMimeTypes.find((type) => MediaRecorder.isTypeSupported(type)) || 'video/webm';
 
       const recorder = new MediaRecorder(combinedStream, {
         mimeType,
@@ -87,6 +88,7 @@ export async function exportVideoClientSide({
         const vEl = document.createElement('video');
         vEl.src = overlay.url;
         vEl.muted = true;
+        vEl.volume = 0;
         vEl.playsInline = true;
         vEl.crossOrigin = 'anonymous';
         overlayVideoElements.set(overlay.id, vEl);

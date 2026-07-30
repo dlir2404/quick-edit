@@ -19,7 +19,6 @@ import {
   Layers as OverlayIcon,
   ArrowUp,
   ArrowDown,
-  Video,
 } from 'lucide-react';
 
 export function Sidebar({
