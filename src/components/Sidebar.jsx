@@ -18,6 +18,8 @@ import {
   CheckCircle2,
   ArrowUp,
   ArrowDown,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 export function Sidebar({
@@ -59,6 +61,8 @@ export function Sidebar({
   const [tiktokInput, setTiktokInput] = useState('');
   const [showDefaultSettings, setShowDefaultSettings] = useState(false);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
+  const [isTextListCollapsed, setIsTextListCollapsed] = useState(false);
+  const [isEditorCollapsed, setIsEditorCollapsed] = useState(false);
 
   // Local state for default config form before explicit Save click
   const [tempDefaultConfig, setTempDefaultConfig] = useState(defaultTextConfig || {});
@@ -490,7 +494,13 @@ export function Sidebar({
             {activeTab === 'text' && (
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                  <span style={{ fontSize: '0.8rem', fontWeight: '700' }}>Danh Sách Text Layers</span>
+                  <div
+                    onClick={() => setIsTextListCollapsed(!isTextListCollapsed)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', userSelect: 'none' }}
+                  >
+                    {isTextListCollapsed ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    <span style={{ fontSize: '0.8rem', fontWeight: '700' }}>Danh Sách Text Layers ({textLayers.length})</span>
+                  </div>
                   <div style={{ display: 'flex', gap: '4px' }}>
                     <button
                       className="btn btn-secondary btn-icon"
@@ -653,77 +663,111 @@ export function Sidebar({
                   </div>
                 )}
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '130px', overflowY: 'auto' }}>
-                  {textLayers.map((layer, index) => (
-                    <div
-                      key={layer.id}
-                      onClick={() => setSelectedTextId(layer.id)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '6px 10px',
-                        borderRadius: 'var(--radius-md)',
-                        background: selectedTextId === layer.id ? 'rgba(99, 102, 241, 0.2)' : 'rgba(255, 255, 255, 0.03)',
-                        border: `1px solid ${selectedTextId === layer.id ? 'var(--primary)' : 'var(--border-color)'}`,
-                        cursor: 'pointer',
-                        minWidth: 0,
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', minWidth: 0 }}>
-                        <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontWeight: '700', flexShrink: 0 }}>
-                          #{index + 1}
-                        </span>
-                        <span style={{ fontSize: '0.78rem', fontWeight: '600', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                          {layer.text?.replace(/\n/g, ' ') || 'Chữ rỗng'}
-                        </span>
-                      </div>
+                {!isTextListCollapsed && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '140px', overflowY: 'auto' }}>
+                    {textLayers.map((layer, index) => (
+                      <div
+                        key={layer.id}
+                        onClick={() => setSelectedTextId(layer.id)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '6px 10px',
+                          borderRadius: 'var(--radius-md)',
+                          background: selectedTextId === layer.id ? 'rgba(99, 102, 241, 0.2)' : 'rgba(255, 255, 255, 0.03)',
+                          border: `1px solid ${selectedTextId === layer.id ? 'var(--primary)' : 'var(--border-color)'}`,
+                          cursor: 'pointer',
+                          minWidth: 0,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', minWidth: 0 }}>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontWeight: '700', flexShrink: 0 }}>
+                            #{index + 1}
+                          </span>
+                          <span style={{ fontSize: '0.78rem', fontWeight: '600', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                            {layer.text?.replace(/\n/g, ' ') || 'Chữ rỗng'}
+                          </span>
+                        </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
-                        <button
-                          className="btn btn-secondary btn-icon"
-                          style={{ width: '24px', height: '24px' }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onUpdateText(layer.id, { visible: !layer.visible });
-                          }}
-                        >
-                          {layer.visible ? <Eye size={12} /> : <EyeOff size={12} style={{ opacity: 0.5 }} />}
-                        </button>
-                        <button
-                          className="btn btn-danger btn-icon"
-                          style={{ width: '24px', height: '24px' }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDeleteText(layer.id);
-                          }}
-                        >
-                          <Trash2 size={12} />
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                          <button
+                            className="btn btn-secondary btn-icon"
+                            style={{ width: '24px', height: '24px' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onUpdateText(layer.id, { visible: !layer.visible });
+                            }}
+                          >
+                            {layer.visible ? <Eye size={12} /> : <EyeOff size={12} style={{ opacity: 0.5 }} />}
+                          </button>
+                          <button
+                            className="btn btn-danger btn-icon"
+                            style={{ width: '24px', height: '24px' }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteText(layer.id);
+                            }}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
 
-                  {textLayers.length === 0 && (
-                    <div style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '10px 0', fontSize: '0.78rem' }}>
-                      Bấm nút '+' để thêm chữ vào video
-                    </div>
-                  )}
-                </div>
+                    {textLayers.length === 0 && (
+                      <div style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '10px 0', fontSize: '0.78rem' }}>
+                        Bấm nút '+' để thêm chữ vào video
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {selectedTextLayer && (
                   <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <div className="form-group">
-                      <label className="form-label">Nội dung (Enter xuống dòng)</label>
-                      <textarea
-                        rows={3}
-                        className="form-textarea"
-                        style={{ resize: 'vertical' }}
-                        value={selectedTextLayer.text}
-                        onChange={(e) => onUpdateText(selectedTextLayer.id, { text: e.target.value })}
-                        placeholder="Nhập chữ... (Enter để xuống dòng)"
-                      />
+                    <div
+                      onClick={() => setIsEditorCollapsed(!isEditorCollapsed)}
+                      style={{
+                        fontSize: '0.78rem',
+                        fontWeight: '700',
+                        color: 'var(--primary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                      }}
+                    >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        {isEditorCollapsed ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        Thuộc tính Text đang chọn #{textLayers.findIndex((l) => l.id === selectedTextLayer.id) + 1}
+                      </span>
+                      <button
+                        className="btn btn-secondary btn-icon"
+                        style={{ width: '22px', height: '22px', fontSize: '0.65rem' }}
+                        title="Bỏ chọn layer này"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedTextId(null);
+                        }}
+                      >
+                        ✕
+                      </button>
                     </div>
+
+                    {!isEditorCollapsed && (
+                      <>
+                        <div className="form-group">
+                          <label className="form-label">Nội dung (Enter xuống dòng)</label>
+                          <textarea
+                            rows={3}
+                            className="form-textarea"
+                            style={{ resize: 'vertical' }}
+                            value={selectedTextLayer.text}
+                            onChange={(e) => onUpdateText(selectedTextLayer.id, { text: e.target.value })}
+                            placeholder="Nhập chữ... (Enter để xuống dòng)"
+                          />
+                        </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
                       <div className="form-group">
@@ -849,6 +893,8 @@ export function Sidebar({
                     >
                       <Trash2 size={14} /> Xóa Text Layer Này
                     </button>
+                      </>
+                    )}
                   </div>
                 )}
               </>

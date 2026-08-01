@@ -580,7 +580,7 @@ html, body {
   background: #11141d;
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  overflow: hidden;
+  overflow: visible;
   position: relative;
   width: 100%;
 }

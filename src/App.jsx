@@ -397,15 +397,30 @@ export function App() {
   // Remove a merged video clip
   const handleRemoveVideoClip = (id) => {
     setVideoClips((prev) => {
-      const nextClips = prev.filter((c) => c.id !== id);
-      if (nextClips.length > 0) {
+      const remaining = prev.filter((c) => c.id !== id);
+      if (remaining.length > 0) {
+        const track0Clips = remaining
+          .filter((c) => (c.trackIndex || 0) === 0)
+          .sort((a, b) => (a.startTime || 0) - (b.startTime || 0));
+        const overlayClips = remaining.filter((c) => (c.trackIndex || 0) > 0);
+
+        let currentStart = 0;
+        const compactedTrack0 = track0Clips.map((clip) => {
+          const effDur = getEffectiveClipDuration(clip);
+          const updated = { ...clip, startTime: Number(currentStart.toFixed(1)) };
+          currentStart = Number((currentStart + effDur).toFixed(1));
+          return updated;
+        });
+
+        const nextClips = [...compactedTrack0, ...overlayClips];
         const firstBaseClip = nextClips.find((clip) => (clip.trackIndex || 0) === 0) || nextClips[0];
         setVideoSrc(firstBaseClip.url);
         setDuration(calculateTotalClipsDuration(nextClips));
+        return nextClips;
       } else {
         handleReset();
+        return [];
       }
-      return nextClips;
     });
   };
 
@@ -416,9 +431,23 @@ export function App() {
 
   const handleVideoClipDragEnd = () => {
     setVideoClips((prev) => {
-      const newTotalDur = calculateTotalClipsDuration(prev);
+      const track0Clips = prev
+        .filter((c) => (c.trackIndex || 0) === 0)
+        .sort((a, b) => (a.startTime || 0) - (b.startTime || 0));
+      const overlayClips = prev.filter((c) => (c.trackIndex || 0) > 0);
+
+      let currentStart = 0;
+      const compactedTrack0 = track0Clips.map((clip) => {
+        const effDur = getEffectiveClipDuration(clip);
+        const updated = { ...clip, startTime: Number(currentStart.toFixed(1)) };
+        currentStart = Number((currentStart + effDur).toFixed(1));
+        return updated;
+      });
+
+      const nextClips = [...compactedTrack0, ...overlayClips];
+      const newTotalDur = calculateTotalClipsDuration(nextClips);
       if (newTotalDur > 0) setDuration(newTotalDur);
-      return prev;
+      return nextClips;
     });
   };
 

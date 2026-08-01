@@ -33,6 +33,7 @@ export function Timeline({
   const PADDING_PX = 32; // Visual start & end padding in pixels
   const BASE_PX_PER_SECOND = 40;
   const activeTimelineDuration = Math.max(1, duration || 10);
+  const displayDuration = activeTimelineDuration + 5; // Extra 5s buffer space so clip tails are never clipped by track edge
   const pixelsPerSecond = Math.max(0.4, BASE_PX_PER_SECOND * zoomLevel);
 
   // Trackpad 2-finger pinch or Ctrl + MouseWheel event listener
@@ -337,7 +338,7 @@ export function Timeline({
     if (targetTickSeconds > 60) step = 300;
 
     const ticks = [];
-    for (let s = 0; s <= activeTimelineDuration; s += step) {
+    for (let s = 0; s <= displayDuration; s += step) {
       ticks.push(Number(s.toFixed(2)));
     }
     return ticks;
@@ -480,7 +481,7 @@ export function Timeline({
         {/* Inner container uses a fixed pixels-per-second time scale */}
         <div
           style={{
-            width: `${activeTimelineDuration * pixelsPerSecond + PADDING_PX * 2}px`,
+            width: `${displayDuration * pixelsPerSecond + PADDING_PX * 2}px`,
             minWidth: '10px',
             paddingLeft: `${PADDING_PX}px`,
             paddingRight: `${PADDING_PX}px`,
@@ -490,13 +491,13 @@ export function Timeline({
         >
           {/* Top Time Ruler Bar */}
           <div className="timeline-top-ruler" onClick={handleTimelineClick} style={{ position: 'relative', height: '24px', marginBottom: '8px' }}>
-            <div className="timeline-ruler-inner" style={{ position: 'relative', width: `${activeTimelineDuration * pixelsPerSecond}px`, height: '100%', left: 0, right: 'auto' }}>
+            <div className="timeline-ruler-inner" style={{ position: 'relative', width: `${displayDuration * pixelsPerSecond}px`, height: '100%', left: 0, right: 'auto' }}>
               {ticks.map((sec) => {
                 const positionPx = sec * pixelsPerSecond;
                 const formatted = sec < 10 ? `0${sec}s` : `${sec}s`;
                 let translateX = '-50%';
                 if (sec === 0) translateX = '0%';
-                if (sec >= activeTimelineDuration) translateX = '-100%';
+                if (sec >= displayDuration) translateX = '-100%';
 
                 return (
                   <div
@@ -517,7 +518,7 @@ export function Timeline({
             className="timeline-tracks-area"
             ref={tracksAreaRef}
             onClick={handleTimelineClick}
-            style={{ position: 'relative', width: `${activeTimelineDuration * pixelsPerSecond}px`, overflow: 'visible', padding: 0 }}
+            style={{ position: 'relative', width: `${displayDuration * pixelsPerSecond}px`, overflow: 'visible', padding: 0 }}
           >
             <div className="timeline-track-inner-zone" style={{ position: 'relative', width: '100%', margin: 0 }}>
               {/* Dynamic Video Track Rows */}
