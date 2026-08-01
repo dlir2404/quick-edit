@@ -1,12 +1,11 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Maximize, Upload, Sparkles, Link as LinkIcon, Loader2 } from 'lucide-react';
-import { getActiveClipForTime, switchVideoSource } from '../App';
+import { getActiveClipForTime, getActiveClipsForTimeAllTracks, switchVideoSource } from '../App';
 
 export function VideoCanvas({
   videoRef,
   videoSrc,
   videoClips = [],
-  overlayLayers = [],
   selectedOverlayId,
   setSelectedOverlayId,
   onUpdateOverlay,
@@ -123,8 +122,9 @@ export function VideoCanvas({
 
         const currSec = video.currentTime;
 
-        // Render Video Overlay Layers (Picture-In-Picture / Watermark Video)
-        (overlayLayers || []).forEach((overlay) => {
+        // Render Multitrack Video Overlay Layers (trackIndex >= 1)
+        const overlayClips = (videoClips || []).filter((c) => (c.trackIndex || 0) > 0);
+        overlayClips.forEach((overlay) => {
           let vEl = overlayVideoRefs.current.get(overlay.id);
           if (!vEl) {
             vEl = document.createElement('video');
@@ -140,7 +140,11 @@ export function VideoCanvas({
             overlayVideoRefs.current.set(overlay.id, vEl);
           }
 
-          const isActive = overlay.visible && currSec >= overlay.startTime && currSec <= overlay.endTime;
+          const effDur = Math.max(0.2, (overlay.duration || 10) - (overlay.trimStart || 0) - (overlay.trimEnd || 0));
+          const overlayStart = overlay.startTime || 0;
+          const overlayEnd = overlayStart + effDur;
+
+          const isActive = overlay.visible !== false && currentTime >= overlayStart && currentTime <= overlayEnd;
 
           if (!isActive) {
             if (vEl && !vEl.paused) vEl.pause();
@@ -148,7 +152,7 @@ export function VideoCanvas({
           }
 
           if (vEl) {
-            const relTime = Math.max(0.05, currSec - overlay.startTime);
+            const relTime = Math.max(0.05, (overlay.trimStart || 0) + (currentTime - overlayStart));
             vEl.playbackRate = video.playbackRate || 1.0;
 
             if (isPlaying) {
@@ -167,10 +171,13 @@ export function VideoCanvas({
 
             const vW = vEl.videoWidth || 1280;
             const vH = vEl.videoHeight || 720;
-            const ovWidth = (overlay.width / 100) * canvas.width;
+            const widthPct = overlay.widthPercent !== undefined ? overlay.widthPercent : (overlay.width || 100);
+            const ovWidth = (widthPct / 100) * canvas.width;
             const ovHeight = ovWidth * (vH / vW);
-            const ovX = (overlay.x / 100) * canvas.width - ovWidth / 2;
-            const ovY = (overlay.y / 100) * canvas.height - ovHeight / 2;
+            const posX = overlay.x !== undefined ? overlay.x : 50;
+            const posY = overlay.y !== undefined ? overlay.y : 50;
+            const ovX = (posX / 100) * canvas.width - ovWidth / 2;
+            const ovY = (posY / 100) * canvas.height - ovHeight / 2;
 
             ctx.save();
             ctx.globalAlpha = overlay.opacity !== undefined ? overlay.opacity : 1;
@@ -317,27 +324,53 @@ export function VideoCanvas({
 
         if (videoClips && videoClips.length > 0) {
           const activeInfo = getActiveClipForTime(currentTime, videoClips);
-          const localTime = video.currentTime;
-          const trimStart = activeInfo.clip?.trimStart || 0;
-          const trimEnd = activeInfo.clip?.trimEnd || 0;
-          const origDur = activeInfo.clip?.duration || 10;
-          const maxLocalTime = Math.max(0.1, origDur - trimEnd);
+          const track0Clips = videoClips
+            .filter((c) => (c.trackIndex || 0) === 0)
+            .sort((a, b) => (a.startTime || 0) - (b.startTime || 0));
 
-          const effLocalTime = Math.max(0, localTime - trimStart);
-          const currentGlobalTime = activeInfo.accumulatedStart + effLocalTime;
-          setCurrentTime(Number(currentGlobalTime.toFixed(1)));
+          if (activeInfo.clip) {
+            const localTime = video.currentTime;
+            const trimStart = activeInfo.clip?.trimStart || 0;
+            const trimEnd = activeInfo.clip?.trimEnd || 0;
+            const origDur = activeInfo.clip?.duration || 10;
+            const maxLocalTime = Math.max(0.1, origDur - trimEnd);
 
-          if (isPlaying && (video.ended || localTime >= maxLocalTime - 0.08)) {
-            if (activeInfo.clipIndex < videoClips.length - 1) {
-              const nextGlobalTime = Number((activeInfo.accumulatedStart + activeInfo.effDur + 0.05).toFixed(1));
-              setCurrentTime(nextGlobalTime);
-              const nextInfo = getActiveClipForTime(nextGlobalTime, videoClips);
-              if (nextInfo.clip) {
-                switchVideoSource(video, nextInfo.clip.url, nextInfo.localSeekTime, true);
+            const effLocalTime = Math.max(0, localTime - trimStart);
+            const currentGlobalTime = activeInfo.accumulatedStart + effLocalTime;
+            setCurrentTime(currentGlobalTime);
+
+            if (isPlaying && (video.ended || localTime >= maxLocalTime - 0.08)) {
+              if (activeInfo.clipIndex >= 0 && activeInfo.clipIndex < track0Clips.length - 1) {
+                const nextClip = track0Clips[activeInfo.clipIndex + 1];
+                const nextGlobalTime = (nextClip.startTime || 0) + 0.01;
+                setCurrentTime(nextGlobalTime);
+                switchVideoSource(video, nextClip.url, nextClip.trimStart || 0, true);
+              } else {
+                // Reached end of Track 0 clips
+                if (currentGlobalTime >= duration - 0.15) {
+                  video.pause();
+                  setIsPlaying(false);
+                } else {
+                  // Gaps or overlays continue past Track 0 clips
+                  const nextGlobalTime = currentGlobalTime + 0.05;
+                  setCurrentTime(nextGlobalTime);
+                }
               }
-            } else {
-              video.pause();
-              setIsPlaying(false);
+            }
+          } else {
+            // In a gap between Track 0 clips or past Track 0 clips
+            if (isPlaying) {
+              const nextTime = currentTime + 1 / 30;
+              if (nextTime >= duration - 0.05) {
+                video.pause();
+                setIsPlaying(false);
+              } else {
+                setCurrentTime(nextTime);
+                const nextInfo = getActiveClipForTime(nextTime, videoClips);
+                if (nextInfo.clip) {
+                  switchVideoSource(video, nextInfo.clip.url, nextInfo.localSeekTime, true);
+                }
+              }
             }
           }
         } else {
@@ -351,7 +384,7 @@ export function VideoCanvas({
     renderFrame();
 
     return () => cancelAnimationFrame(animId);
-  }, [crop, textLayers, selectedTextId, overlayLayers, selectedOverlayId, currentTime, videoClips, isPlaying]);
+  }, [crop, textLayers, selectedTextId, selectedOverlayId, currentTime, videoClips, isPlaying]);
 
   const [dragTarget, setDragTarget] = useState('text'); // 'text' | 'overlay'
 
@@ -407,7 +440,8 @@ export function VideoCanvas({
     const currSec = videoRef.current ? videoRef.current.currentTime : 0;
 
     // 1. Check Selected Video Overlay Layer
-    const selectedOverlay = (overlayLayers || []).find((o) => o.id === selectedOverlayId);
+    const overlayClips = (videoClips || []).filter((c) => (c.trackIndex || 0) > 0);
+    const selectedOverlay = overlayClips.find((o) => o.id === selectedOverlayId);
     if (selectedOverlay && selectedOverlay.visible && currSec >= selectedOverlay.startTime && currSec <= selectedOverlay.endTime) {
       const vEl = overlayVideoRefs.current.get(selectedOverlay.id);
       const aspect = vEl && vEl.videoWidth && vEl.videoHeight ? vEl.videoHeight / vEl.videoWidth : 0.5625;
@@ -549,8 +583,8 @@ export function VideoCanvas({
 
     // 3. Search for any visible Overlay Layer hit
     let foundOverlay = null;
-    for (let i = (overlayLayers || []).length - 1; i >= 0; i--) {
-      const overlay = overlayLayers[i];
+    for (let i = overlayClips.length - 1; i >= 0; i--) {
+      const overlay = overlayClips[i];
       if (!overlay.visible || currSec < overlay.startTime || currSec > overlay.endTime) continue;
 
       const vEl = overlayVideoRefs.current.get(overlay.id);

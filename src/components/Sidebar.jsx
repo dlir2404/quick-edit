@@ -16,7 +16,6 @@ import {
   Settings,
   Save,
   CheckCircle2,
-  Layers as OverlayIcon,
   ArrowUp,
   ArrowDown,
 } from 'lucide-react';
@@ -33,7 +32,6 @@ export function Sidebar({
   onAppendVideoClip,
   onRemoveVideoClip,
   onReorderVideoClip,
-  overlayLayers = [],
   selectedOverlayId,
   setSelectedOverlayId,
   onAddOverlay,
@@ -137,7 +135,14 @@ export function Sidebar({
   };
 
   const selectedTextLayer = textLayers.find((t) => t.id === selectedTextId);
-  const selectedOverlayLayer = overlayLayers.find((o) => o.id === selectedOverlayId);
+  const selectedOverlayLayer = (videoClips || []).find((c) => c.id === selectedOverlayId);
+  const selectedOverlayWidth = selectedOverlayLayer?.widthPercent ?? selectedOverlayLayer?.width ?? 100;
+  const selectedOverlayEndTime = selectedOverlayLayer
+    ? (selectedOverlayLayer.startTime || 0) + Math.max(
+      0.2,
+      (selectedOverlayLayer.duration || 10) - (selectedOverlayLayer.trimStart || 0) - (selectedOverlayLayer.trimEnd || 0)
+    )
+    : 0;
 
   return (
     <>
@@ -154,7 +159,7 @@ export function Sidebar({
         <button
           className={`tool-icon-btn ${activeTab === 'video' && isDrawerOpen ? 'active' : ''}`}
           onClick={() => handleToolClick('video')}
-          title="Nạp & Ghép Video"
+          title="Nạp & Quản lý Video Clips"
         >
           <Film size={18} />
           <span>Media</span>
@@ -167,15 +172,6 @@ export function Sidebar({
         >
           <Type size={18} />
           <span>Text</span>
-        </button>
-
-        <button
-          className={`tool-icon-btn ${activeTab === 'overlay' && isDrawerOpen ? 'active' : ''}`}
-          onClick={() => handleToolClick('overlay')}
-          title="Chèn Video Overlay / Logo PIP"
-        >
-          <OverlayIcon size={18} />
-          <span>Overlay</span>
         </button>
 
         <button
@@ -203,9 +199,8 @@ export function Sidebar({
           <div className="mobile-sheet-handle" onClick={() => setIsDrawerOpen(false)} />
           <div className="drawer-header">
             <span>
-              {activeTab === 'video' && `📁 Nguồn Media & Ghép (${videoClips.length})`}
+              {activeTab === 'video' && `📁 Nguồn Media Clips (${videoClips.length})`}
               {activeTab === 'text' && `💬 Chèn Text (${textLayers.length})`}
-              {activeTab === 'overlay' && `🖼️ Video Overlay (${overlayLayers.length})`}
               {activeTab === 'crop' && '✂️ Cắt Khung Hình (Crop)'}
               {(activeTab === 'audio' || activeTab === 'controls') && '🎛️ Điều Khiển & Cấu Hình'}
             </span>
@@ -268,68 +263,94 @@ export function Sidebar({
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     <div style={{ fontSize: '0.8rem', fontWeight: '800', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span>🎬 Danh Sách Clip Ghép Nối ({videoClips.length})</span>
+                      <span>🎬 Danh Sách Media Clips ({videoClips.length})</span>
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '200px', overflowY: 'auto' }}>
-                      {videoClips.map((clip, index) => (
-                        <div
-                          key={clip.id}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '8px 10px',
-                            borderRadius: 'var(--radius-md)',
-                            background: 'rgba(255, 255, 255, 0.04)',
-                            border: '1px solid var(--border-color)',
-                            minWidth: 0,
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', minWidth: 0 }}>
-                            <span style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: '800', flexShrink: 0 }}>
-                              #{index + 1}
-                            </span>
-                            <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                              <span style={{ fontSize: '0.78rem', fontWeight: '600', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                                {clip.name}
+                      {videoClips.map((clip, index) => {
+                        const isSelected = selectedOverlayId === clip.id;
+                        const isTrack0 = (clip.trackIndex || 0) === 0;
+
+                        return (
+                          <div
+                            key={clip.id}
+                            onClick={() => setSelectedOverlayId && setSelectedOverlayId(clip.id)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '8px 10px',
+                              borderRadius: 'var(--radius-md)',
+                              background: isSelected ? 'rgba(56, 189, 248, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+                              border: `1px solid ${isSelected ? '#38bdf8' : 'var(--border-color)'}`,
+                              cursor: 'pointer',
+                              minWidth: 0,
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', minWidth: 0 }}>
+                              <span style={{ fontSize: '0.7rem', color: isTrack0 ? '#38bdf8' : '#a7f3d0', fontWeight: '800', flexShrink: 0 }}>
+                                T{clip.trackIndex || 0}
                               </span>
-                              <span style={{ fontSize: '0.68rem', color: 'var(--text-dim)' }}>
-                                {clip.duration?.toFixed(1)}s ({clip.width}x{clip.height})
-                              </span>
+                              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                                <span style={{ fontSize: '0.78rem', fontWeight: '600', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                  {clip.name}
+                                </span>
+                                <span style={{ fontSize: '0.68rem', color: 'var(--text-dim)' }}>
+                                  {clip.duration?.toFixed(1)}s ({clip.width || 720}x{clip.height || 1280})
+                                </span>
+                              </div>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0 }}>
+                              <button
+                                className="btn btn-secondary btn-icon"
+                                style={{ width: '22px', height: '22px' }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (onUpdateOverlay) onUpdateOverlay(clip.id, { visible: clip.visible === false ? true : false });
+                                }}
+                              >
+                                {clip.visible !== false ? <Eye size={11} /> : <EyeOff size={11} style={{ opacity: 0.5 }} />}
+                              </button>
+                              <button
+                                className="btn btn-secondary btn-icon"
+                                style={{ width: '22px', height: '22px' }}
+                                disabled={index === 0}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (onReorderVideoClip) onReorderVideoClip(index, -1);
+                                }}
+                                title="Di chuyển lên trước"
+                                >
+                                <ArrowUp size={11} />
+                              </button>
+                              <button
+                                className="btn btn-secondary btn-icon"
+                                style={{ width: '22px', height: '22px' }}
+                                disabled={index === videoClips.length - 1}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (onReorderVideoClip) onReorderVideoClip(index, 1);
+                                }}
+                                title="Di chuyển xuống sau"
+                              >
+                                <ArrowDown size={11} />
+                              </button>
+                              <button
+                                className="btn btn-danger btn-icon"
+                                style={{ width: '22px', height: '22px' }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (onRemoveVideoClip) onRemoveVideoClip(clip.id);
+                                }}
+                                title="Xóa clip này"
+                              >
+                                <Trash2 size={11} />
+                              </button>
                             </div>
                           </div>
-
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0 }}>
-                            <button
-                              className="btn btn-secondary btn-icon"
-                              style={{ width: '22px', height: '22px' }}
-                              disabled={index === 0}
-                              onClick={() => onReorderVideoClip && onReorderVideoClip(index, -1)}
-                              title="Di chuyển lên trước"
-                            >
-                              <ArrowUp size={11} />
-                            </button>
-                            <button
-                              className="btn btn-secondary btn-icon"
-                              style={{ width: '22px', height: '22px' }}
-                              disabled={index === videoClips.length - 1}
-                              onClick={() => onReorderVideoClip && onReorderVideoClip(index, 1)}
-                              title="Di chuyển xuống sau"
-                            >
-                              <ArrowDown size={11} />
-                            </button>
-                            <button
-                              className="btn btn-danger btn-icon"
-                              style={{ width: '22px', height: '22px' }}
-                              onClick={() => onRemoveVideoClip && onRemoveVideoClip(clip.id)}
-                              title="Xóa clip này"
-                            >
-                              <Trash2 size={11} />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     <label className="btn btn-primary" style={{ cursor: 'pointer', width: '100%', fontSize: '0.8rem', padding: '8px' }}>
@@ -345,6 +366,107 @@ export function Sidebar({
                         }}
                       />
                     </label>
+
+                    <label className="btn btn-secondary" style={{ cursor: 'pointer', width: '100%', fontSize: '0.8rem', borderColor: 'rgba(6, 182, 212, 0.45)', color: '#67e8f9' }}>
+                      <Plus size={15} /> Thêm Video Overlay (PIP / Logo)
+                      <input
+                        type="file"
+                        accept="video/*"
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0] && onAddOverlay) {
+                            onAddOverlay(e.target.files[0]);
+                          }
+                        }}
+                      />
+                    </label>
+
+                    {selectedOverlayLayer && (
+                      <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div style={{ fontSize: '0.78rem', color: '#67e8f9', fontWeight: '800' }}>
+                          Thuộc tính clip đang chọn · Track {(selectedOverlayLayer.trackIndex || 0) + 1}
+                        </div>
+
+                        {(selectedOverlayLayer.trackIndex || 0) > 0 && (
+                          <>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
+                              <div className="form-group">
+                                <label className="form-label">Vị trí X: {selectedOverlayLayer.x ?? 50}%</label>
+                                <input
+                                  type="range"
+                                  className="range-slider"
+                                  min="0"
+                                  max="100"
+                                  value={selectedOverlayLayer.x ?? 50}
+                                  onChange={(e) => onUpdateOverlay(selectedOverlayLayer.id, { x: Number(e.target.value) })}
+                                />
+                              </div>
+                              <div className="form-group">
+                                <label className="form-label">Vị trí Y: {selectedOverlayLayer.y ?? 50}%</label>
+                                <input
+                                  type="range"
+                                  className="range-slider"
+                                  min="0"
+                                  max="100"
+                                  value={selectedOverlayLayer.y ?? 50}
+                                  onChange={(e) => onUpdateOverlay(selectedOverlayLayer.id, { y: Number(e.target.value) })}
+                                />
+                              </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
+                              <div className="form-group">
+                                <label className="form-label">Kích thước: {selectedOverlayWidth}%</label>
+                                <input
+                                  type="range"
+                                  className="range-slider"
+                                  min="5"
+                                  max="100"
+                                  value={selectedOverlayLayer.widthPercent ?? 100}
+                                  onChange={(e) => onUpdateOverlay(selectedOverlayLayer.id, { widthPercent: Number(e.target.value) })}
+                                />
+                              </div>
+                              <div className="form-group">
+                                <label className="form-label">Độ mờ: {Math.round((selectedOverlayLayer.opacity ?? 1) * 100)}%</label>
+                                <input
+                                  type="range"
+                                  className="range-slider"
+                                  min="0.1"
+                                  max="1"
+                                  step="0.05"
+                                  value={selectedOverlayLayer.opacity ?? 1}
+                                  onChange={(e) => onUpdateOverlay(selectedOverlayLayer.id, { opacity: Number(e.target.value) })}
+                                />
+                              </div>
+                            </div>
+                          </>
+                        )}
+
+                        <div className="form-group">
+                          <label className="form-label">Âm lượng clip: {Math.round((selectedOverlayLayer.volume ?? 1) * 100)}%</label>
+                          <input
+                            type="range"
+                            className="range-slider"
+                            min="0"
+                            max="1"
+                            step="0.05"
+                            value={selectedOverlayLayer.volume ?? 1}
+                            onChange={(e) => onUpdateOverlay(selectedOverlayLayer.id, { volume: Number(e.target.value) })}
+                          />
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                          <span>{(selectedOverlayLayer.startTime || 0).toFixed(1)}s – {selectedOverlayEndTime.toFixed(1)}s</span>
+                          <button
+                            className="btn btn-danger"
+                            style={{ padding: '5px 9px', fontSize: '0.72rem' }}
+                            onClick={() => onDeleteOverlay(selectedOverlayLayer.id)}
+                          >
+                            <Trash2 size={12} /> Xóa clip
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
                     <label className="btn btn-secondary" style={{ cursor: 'pointer', width: '100%', fontSize: '0.78rem' }}>
                       <Upload size={13} /> Đổi Toàn Bộ Video Khác
@@ -719,198 +841,14 @@ export function Sidebar({
                         </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* TAB 3: VIDEO OVERLAY / PIP */}
-            {activeTab === 'overlay' && (
-              <>
-                <div className="form-group" style={{ marginBottom: '8px' }}>
-                  <label className="btn btn-primary" style={{ cursor: 'pointer', width: '100%', fontSize: '0.8rem', padding: '8px' }}>
-                    <Plus size={15} /> Thêm Video Overlay (PIP / Logo)
-                    <input
-                      type="file"
-                      accept="video/*"
-                      style={{ display: 'none' }}
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files[0]) {
-                          if (onAddOverlay) onAddOverlay(e.target.files[0]);
-                        }
-                      }}
-                    />
-                  </label>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '140px', overflowY: 'auto' }}>
-                  {overlayLayers.map((layer, index) => (
-                    <div
-                      key={layer.id}
-                      onClick={() => setSelectedOverlayId(layer.id)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '6px 10px',
-                        borderRadius: 'var(--radius-md)',
-                        background: selectedOverlayId === layer.id ? 'rgba(6, 182, 212, 0.2)' : 'rgba(255, 255, 255, 0.03)',
-                        border: `1px solid ${selectedOverlayId === layer.id ? '#06b6d4' : 'var(--border-color)'}`,
-                        cursor: 'pointer',
-                        minWidth: 0,
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', minWidth: 0 }}>
-                        <span style={{ fontSize: '0.7rem', color: '#06b6d4', fontWeight: '800', flexShrink: 0 }}>
-                          #{index + 1}
-                        </span>
-                        <span style={{ fontSize: '0.78rem', fontWeight: '600', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                          🎬 {layer.name || 'Overlay Video'}
-                        </span>
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
-                        <button
-                          className="btn btn-secondary btn-icon"
-                          style={{ width: '24px', height: '24px' }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onUpdateOverlay(layer.id, { visible: !layer.visible });
-                          }}
-                        >
-                          {layer.visible ? <Eye size={12} /> : <EyeOff size={12} style={{ opacity: 0.5 }} />}
-                        </button>
-                        <button
-                          className="btn btn-danger btn-icon"
-                          style={{ width: '24px', height: '24px' }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDeleteOverlay(layer.id);
-                          }}
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-
-                  {overlayLayers.length === 0 && (
-                    <div style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '12px 0', fontSize: '0.78rem' }}>
-                      Chưa có video overlay nào. Bấm nút trên để chèn logo/video hình trong hình!
-                    </div>
-                  )}
-                </div>
-
-                {selectedOverlayLayer && (
-                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
-                      <div className="form-group">
-                        <label className="form-label">Vị trí X: {selectedOverlayLayer.x}%</label>
-                        <div className="range-slider-container">
-                          <input
-                            type="range"
-                            className="range-slider"
-                            min="0"
-                            max="100"
-                            value={selectedOverlayLayer.x}
-                            onChange={(e) => onUpdateOverlay(selectedOverlayLayer.id, { x: Number(e.target.value) })}
-                          />
-                        </div>
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Vị trí Y: {selectedOverlayLayer.y}%</label>
-                        <div className="range-slider-container">
-                          <input
-                            type="range"
-                            className="range-slider"
-                            min="0"
-                            max="100"
-                            value={selectedOverlayLayer.y}
-                            onChange={(e) => onUpdateOverlay(selectedOverlayLayer.id, { y: Number(e.target.value) })}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
-                      <div className="form-group">
-                        <label className="form-label">Kích thước (Rộng): {selectedOverlayLayer.width}%</label>
-                        <div className="range-slider-container">
-                          <input
-                            type="range"
-                            className="range-slider"
-                            min="5"
-                            max="100"
-                            value={selectedOverlayLayer.width}
-                            onChange={(e) => onUpdateOverlay(selectedOverlayLayer.id, { width: Number(e.target.value) })}
-                          />
-                        </div>
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Độ mờ: {Math.round((selectedOverlayLayer.opacity ?? 1) * 100)}%</label>
-                        <div className="range-slider-container">
-                          <input
-                            type="range"
-                            className="range-slider"
-                            min="0.1"
-                            max="1"
-                            step="0.05"
-                            value={selectedOverlayLayer.opacity ?? 1}
-                            onChange={(e) => onUpdateOverlay(selectedOverlayLayer.id, { opacity: Number(e.target.value) })}
-                          />
-                        </div>
-                      </div>
-                    </div>
 
                     <button
-                      className="btn btn-secondary"
-                      style={{ width: '100%', fontSize: '0.76rem', marginTop: '2px', borderColor: 'rgba(6, 182, 212, 0.4)', color: '#38bdf8' }}
-                      onClick={() => {
-                        if (onUpdateDefaultOverlayConfig) {
-                          onUpdateDefaultOverlayConfig({
-                            width: selectedOverlayLayer.width,
-                            opacity: selectedOverlayLayer.opacity ?? 1,
-                            x: selectedOverlayLayer.x,
-                            y: selectedOverlayLayer.y,
-                          });
-                          setShowSaveSuccess(true);
-                          setTimeout(() => setShowSaveSuccess(false), 2000);
-                        }
-                      }}
+                      className="btn btn-danger"
+                      style={{ width: '100%', marginTop: '6px', padding: '8px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                      onClick={() => onDeleteText(selectedTextLayer.id)}
                     >
-                      <Save size={13} /> Lưu Kích Thước Hiện Tại ({selectedOverlayLayer.width}%) Làm Mặc Định
+                      <Trash2 size={14} /> Xóa Text Layer Này
                     </button>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '8px' }}>
-                      <div className="form-group">
-                        <label className="form-label">Bắt đầu: {selectedOverlayLayer.startTime}s</label>
-                        <div className="range-slider-container">
-                          <input
-                            type="range"
-                            className="range-slider"
-                            min="0"
-                            max={videoData?.duration || 10}
-                            step="0.1"
-                            value={selectedOverlayLayer.startTime}
-                            onChange={(e) => onUpdateOverlay(selectedOverlayLayer.id, { startTime: Number(e.target.value) })}
-                          />
-                        </div>
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Kết thúc: {selectedOverlayLayer.endTime}s</label>
-                        <div className="range-slider-container">
-                          <input
-                            type="range"
-                            className="range-slider"
-                            min="0"
-                            max={videoData?.duration || 10}
-                            step="0.1"
-                            value={selectedOverlayLayer.endTime}
-                            onChange={(e) => onUpdateOverlay(selectedOverlayLayer.id, { endTime: Number(e.target.value) })}
-                          />
-                        </div>
-                      </div>
-                    </div>
                   </div>
                 )}
               </>

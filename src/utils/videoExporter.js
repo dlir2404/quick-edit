@@ -4,7 +4,6 @@
 export async function exportVideoClientSide({
   videoElement,
   videoClips = [],
-  overlayLayers = [],
   crop,
   textLayers = [],
   qualityResolution = { width: 1280, height: 720 },
@@ -82,9 +81,10 @@ export async function exportVideoClientSide({
         resolve({ url, mimeType, blob });
       };
 
-      // Prepare overlay video elements for export
+      // Prepare overlay video elements for export (trackIndex >= 1)
       const overlayVideoElements = new Map();
-      (overlayLayers || []).forEach((overlay) => {
+      const overlayClips = (videoClips || []).filter((c) => (c.trackIndex || 0) > 0);
+      overlayClips.forEach((overlay) => {
         const vEl = document.createElement('video');
         vEl.src = overlay.url;
         vEl.muted = true;
@@ -126,12 +126,16 @@ export async function exportVideoClientSide({
           );
         } catch (e) {}
 
-        // Render Video Overlay Layers during export
-        (overlayLayers || []).forEach((overlay) => {
+        // Render Video Overlay Layers during export (trackIndex >= 1)
+        overlayClips.forEach((overlay) => {
           const vEl = overlayVideoElements.get(overlay.id);
           if (!vEl) return;
 
-          const isActive = overlay.visible && currentTime >= overlay.startTime && currentTime <= overlay.endTime;
+          const effDur = Math.max(0.2, (overlay.duration || 10) - (overlay.trimStart || 0) - (overlay.trimEnd || 0));
+          const overlayStart = overlay.startTime || 0;
+          const overlayEnd = overlayStart + effDur;
+
+          const isActive = overlay.visible !== false && currentTime >= overlayStart && currentTime <= overlayEnd;
 
           if (!isActive) {
             if (!vEl.paused) vEl.pause();
@@ -139,7 +143,7 @@ export async function exportVideoClientSide({
           }
 
           if (vEl) {
-            const relTime = Math.max(0.05, currentTime - overlay.startTime);
+            const relTime = Math.max(0.05, (overlay.trimStart || 0) + (currentTime - overlayStart));
             if (vEl.paused) {
               vEl.currentTime = relTime;
               vEl.play().catch(() => {});
@@ -147,10 +151,13 @@ export async function exportVideoClientSide({
               vEl.currentTime = relTime;
             }
 
-            const ovWidth = (overlay.width / 100) * exportCanvas.width;
+            const widthPct = overlay.widthPercent !== undefined ? overlay.widthPercent : (overlay.width || 100);
+            const ovWidth = (widthPct / 100) * exportCanvas.width;
             const ovHeight = ovWidth * ((vEl.videoHeight || 720) / (vEl.videoWidth || 1280));
-            const ovX = (overlay.x / 100) * exportCanvas.width - ovWidth / 2;
-            const ovY = (overlay.y / 100) * exportCanvas.height - ovHeight / 2;
+            const posX = overlay.x !== undefined ? overlay.x : 50;
+            const posY = overlay.y !== undefined ? overlay.y : 50;
+            const ovX = (posX / 100) * exportCanvas.width - ovWidth / 2;
+            const ovY = (posY / 100) * exportCanvas.height - ovHeight / 2;
 
             ctx.save();
             ctx.globalAlpha = overlay.opacity !== undefined ? overlay.opacity : 1;

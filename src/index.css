@@ -160,7 +160,7 @@ html, body {
 .main-workspace {
   display: flex;
   flex: 1;
-  height: calc(100vh - 48px - 140px);
+  height: calc(100vh - 48px - 240px);
   width: 100vw;
   overflow: hidden;
   background: #000000;
@@ -507,8 +507,8 @@ html, body {
 
 /* Timeline Container */
 .timeline-fullwidth {
-  height: 140px;
-  min-height: 140px;
+  height: 240px;
+  min-height: 240px;
   width: 100vw;
   background: #090b10;
   border-top: 1px solid var(--border-color);
@@ -765,8 +765,8 @@ html, body, #root {
 }
 
 .main-workspace {
-  height: calc(100vh - 48px - 140px);
-  height: calc(100dvh - 48px - 140px);
+  height: calc(100vh - 48px - 240px);
+  height: calc(100dvh - 48px - 240px);
 }
 
 @media (max-width: 768px) {
