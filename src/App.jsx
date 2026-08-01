@@ -791,6 +791,7 @@ export function App() {
           onDurationChange={handleDurationChange}
           isPlaying={isPlaying}
           setIsPlaying={setIsPlaying}
+          onSeek={handleSeek}
           crop={crop}
           setCrop={setCrop}
           textLayers={textLayers}

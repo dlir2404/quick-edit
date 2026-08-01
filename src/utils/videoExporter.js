@@ -13,7 +13,12 @@ export async function exportVideoClientSide({
     try {
       const origWidth = videoElement.videoWidth || 1280;
       const origHeight = videoElement.videoHeight || 720;
-      const duration = videoElement.duration || 10;
+      const duration = videoClips.length > 0
+        ? Math.max(...videoClips.map((clip) => {
+          const effDur = Math.max(0.2, (clip.duration || 10) - (clip.trimStart || 0) - (clip.trimEnd || 0));
+          return (clip.startTime || 0) + effDur;
+        }))
+        : (videoElement.duration || 10);
 
       // Crop coordinates in original video scale
       const cropX = (crop.x / 100) * origWidth;
@@ -95,15 +100,30 @@ export async function exportVideoClientSide({
       });
 
       const wasPaused = videoElement.paused;
-      videoElement.currentTime = 0;
-
-      recorder.start();
-      videoElement.play();
-
+      let exportTime = 0;
       let animationFrameId;
+      let isStopped = false;
+      const stopExport = () => {
+        if (isStopped) return;
+        isStopped = true;
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        videoElement.pause();
+        overlayVideoElements.forEach((vEl) => vEl.pause());
+        if (wasPaused) videoElement.currentTime = 0;
+        if (onProgress) onProgress(100);
+        setTimeout(() => recorder.stop(), 300);
+      };
+
+      videoElement.currentTime = 0;
+      recorder.start();
+      // The export loop seeks the base video per project time below; no native
+      // play() call is needed, avoiding play/pause promise races.
 
       const renderExportFrame = () => {
-        const currentTime = videoElement.currentTime;
+        if (isStopped) return;
+        const frameDelta = 1 / 30;
+        exportTime = Math.min(duration, exportTime + frameDelta);
+        const currentTime = exportTime;
         const progress = Math.min(100, Math.round((currentTime / duration) * 100));
         if (onProgress) onProgress(progress);
 
@@ -111,20 +131,39 @@ export async function exportVideoClientSide({
         ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
 
-        // Draw cropped base video frame
-        try {
-          ctx.drawImage(
-            videoElement,
-            cropX,
-            cropY,
-            cropW,
-            cropH,
-            0,
-            0,
-            exportCanvas.width,
-            exportCanvas.height
-          );
-        } catch (e) {}
+        // Seek the active Track 0 clip from the project clock before drawing.
+        const activeBaseClip = videoClips
+          .filter((clip) => (clip.trackIndex || 0) === 0)
+          .sort((a, b) => (a.startTime || 0) - (b.startTime || 0))
+          .find((clip) => {
+            const effDur = Math.max(0.2, (clip.duration || 10) - (clip.trimStart || 0) - (clip.trimEnd || 0));
+            return currentTime >= (clip.startTime || 0) && currentTime < (clip.startTime || 0) + effDur;
+          });
+
+        if (activeBaseClip) {
+          const localTime = Math.max(0.01, (activeBaseClip.trimStart || 0) + currentTime - (activeBaseClip.startTime || 0));
+          if (videoElement.src !== activeBaseClip.url) {
+            videoElement.src = activeBaseClip.url;
+            videoElement.load();
+          }
+          if (videoElement.readyState >= 1 && Math.abs(videoElement.currentTime - localTime) > 0.03) {
+            videoElement.currentTime = localTime;
+          }
+
+          try {
+            ctx.drawImage(
+              videoElement,
+              cropX,
+              cropY,
+              cropW,
+              cropH,
+              0,
+              0,
+              exportCanvas.width,
+              exportCanvas.height
+            );
+          } catch (e) {}
+        }
 
         // Render Video Overlay Layers during export (trackIndex >= 1)
         overlayClips.forEach((overlay) => {
@@ -144,12 +183,15 @@ export async function exportVideoClientSide({
 
           if (vEl) {
             const relTime = Math.max(0.05, (overlay.trimStart || 0) + (currentTime - overlayStart));
-            if (vEl.paused) {
-              vEl.currentTime = relTime;
-              vEl.play().catch(() => {});
-            } else if (Math.abs(vEl.currentTime - relTime) > 0.3) {
+            // Seek first, then render the frame. Playback is not needed for export;
+            // the project clock drives deterministic frame selection and avoids
+            // play()/pause() race conditions that produce AbortError.
+            if (Math.abs(vEl.currentTime - relTime) > 0.03) {
               vEl.currentTime = relTime;
             }
+            if (!vEl.paused) vEl.pause();
+
+            if (vEl.readyState < 2) return;
 
             const widthPct = overlay.widthPercent !== undefined ? overlay.widthPercent : (overlay.width || 100);
             const ovWidth = (widthPct / 100) * exportCanvas.width;
@@ -241,18 +283,16 @@ export async function exportVideoClientSide({
           ctx.restore();
         });
 
-        if (currentTime < duration && !videoElement.ended) {
+        if (currentTime < duration) {
+          // Keep exporting from the project clock even after the base clip ends;
+          // overlays may continue beyond the base video's native duration.
           animationFrameId = requestAnimationFrame(renderExportFrame);
         } else {
-          cancelAnimationFrame(animationFrameId);
-          videoElement.pause();
-          if (wasPaused) videoElement.currentTime = 0;
-          if (onProgress) onProgress(100);
-          setTimeout(() => recorder.stop(), 300);
+          stopExport();
         }
       };
 
-      renderExportFrame();
+      animationFrameId = requestAnimationFrame(renderExportFrame);
     } catch (err) {
       reject(err);
     }

@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Volume2, VolumeX, Maximize, Upload, Sparkles, Link as LinkIcon, Loader2 } from 'lucide-react';
-import { getActiveClipForTime, getActiveClipsForTimeAllTracks, switchVideoSource } from '../App';
+import { Play, Pause, Maximize, Upload, Sparkles, Link as LinkIcon, Loader2 } from 'lucide-react';
+import { getActiveClipForTime, switchVideoSource } from '../App';
 
 export function VideoCanvas({
   videoRef,
@@ -15,6 +15,7 @@ export function VideoCanvas({
   onDurationChange,
   isPlaying,
   setIsPlaying,
+  onSeek,
   crop,
   textLayers,
   selectedTextId,
@@ -31,11 +32,17 @@ export function VideoCanvas({
 }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
+  const timelineClockRef = useRef({ time: 0, lastFrameMs: null });
+  const activeBaseClipIdRef = useRef(null);
 
   const [dragMode, setDragMode] = useState(null); // 'move' | 'resize'
   const [dragStart, setDragStart] = useState({ x: 0, y: 0, initialFontSize: 36, initialX: 50, initialY: 50 });
   const [isDragOverStage, setIsDragOverStage] = useState(false);
   const [tiktokInputUrl, setTiktokInputUrl] = useState('');
+
+  // Canvas Pinch-to-Zoom state (2 fingers or wheel)
+  const [canvasZoom, setCanvasZoom] = useState(1);
+  const touchCanvasDistRef = useRef(null);
 
   // Sync volume & playback rate
   useEffect(() => {
@@ -69,12 +76,31 @@ export function VideoCanvas({
     }
   }, [videoSrc]);
 
-  // Global Paste Event Listener
+  // Pinch-to-zoom (2 fingers) or Ctrl/Cmd + Wheel on canvas container
   useEffect(() => {
-    if (videoSrc) return;
+    const el = containerRef.current;
+    if (!el) return;
 
+    const handleWheel = (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const delta = e.deltaY < 0 ? 0.1 : -0.1;
+        setCanvasZoom((prev) => Math.max(0.2, Math.min(4, Number((prev + delta).toFixed(2)))));
+      }
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, []);
+
+  // Global Paste Event Listener (Cmd+V / Ctrl+V to paste TikTok link)
+  useEffect(() => {
     const handleGlobalPaste = (e) => {
-      const text = e.clipboardData?.getData('text');
+      // Don't intercept paste if user is typing/pasting inside an input/textarea
+      const activeTag = document.activeElement?.tagName?.toLowerCase();
+      if (activeTag === 'input' || activeTag === 'textarea') return;
+
+      const text = e.clipboardData?.getData('text')?.trim();
       if (text && (text.includes('tiktok.com') || text.startsWith('http'))) {
         setTiktokInputUrl(text);
         if (onTikTokSubmit) {
@@ -85,9 +111,63 @@ export function VideoCanvas({
 
     window.addEventListener('paste', handleGlobalPaste);
     return () => window.removeEventListener('paste', handleGlobalPaste);
-  }, [videoSrc, onTikTokSubmit]);
+  }, [onTikTokSubmit]);
+
+  const handleCanvasTouchStart = (e) => {
+    if (e.touches && e.touches.length === 2) {
+      if (e.cancelable) e.preventDefault();
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      touchCanvasDistRef.current = dist;
+    } else {
+      handleCanvasMouseDown(e);
+    }
+  };
+
+  const handleCanvasTouchMove = (e) => {
+    if (e.touches && e.touches.length === 2 && touchCanvasDistRef.current !== null) {
+      if (e.cancelable) e.preventDefault();
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      const factor = dist / touchCanvasDistRef.current;
+      if (Math.abs(factor - 1) > 0.03) {
+        setCanvasZoom((prev) => Math.max(0.2, Math.min(4, Number((prev * factor).toFixed(2)))));
+        touchCanvasDistRef.current = dist;
+      }
+      return;
+    }
+    if (dragMode) {
+      handleMouseMove(e);
+    }
+  };
+
+  const handleCanvasTouchEnd = (e) => {
+    if (!e.touches || e.touches.length < 2) {
+      touchCanvasDistRef.current = null;
+    }
+    if (dragMode) {
+      handleMouseUp();
+    }
+  };
 
   const overlayVideoRefs = useRef(new Map());
+
+  // Keep an independent project clock. Native video.currentTime stops advancing
+  // when a Track 0 clip ends, but overlay tracks may continue after that point.
+  useEffect(() => {
+    if (!isPlaying) {
+      timelineClockRef.current.time = currentTime;
+    }
+  }, [currentTime, isPlaying]);
+
+  useEffect(() => {
+    timelineClockRef.current.lastFrameMs = null;
+    if (isPlaying) {
+      timelineClockRef.current.time = currentTime;
+    }
+  }, [isPlaying]);
 
   // Main canvas render loop
   useEffect(() => {
@@ -98,7 +178,28 @@ export function VideoCanvas({
 
     const ctx = canvas.getContext('2d');
 
-    const renderFrame = () => {
+    const renderFrame = (frameMs) => {
+      if (isPlaying) {
+        const lastFrameMs = timelineClockRef.current.lastFrameMs;
+        if (lastFrameMs !== null) {
+          const elapsedSec = Math.min(0.1, Math.max(0, (frameMs - lastFrameMs) / 1000));
+          timelineClockRef.current.time = Math.min(
+            duration,
+            timelineClockRef.current.time + elapsedSec * (playbackSpeed || 1)
+          );
+          setCurrentTime(timelineClockRef.current.time);
+
+          if (timelineClockRef.current.time >= duration - 0.001) {
+            video.pause();
+            overlayVideoRefs.current.forEach((overlayVideo) => overlayVideo.pause());
+            setIsPlaying(false);
+          }
+        }
+        timelineClockRef.current.lastFrameMs = frameMs;
+      } else {
+        timelineClockRef.current.lastFrameMs = null;
+      }
+
       if (video.readyState >= 1) {
         const origW = video.videoWidth || 1280;
         const origH = video.videoHeight || 720;
@@ -114,13 +215,28 @@ export function VideoCanvas({
         ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        try {
-          ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, canvas.width, canvas.height);
-        } catch (e) {
-          // ignore
+        const timelineTime = timelineClockRef.current.time;
+        const baseInfo = getActiveClipForTime(timelineTime, videoClips);
+
+        if (baseInfo.clip) {
+          if (activeBaseClipIdRef.current !== baseInfo.clip.id) {
+            activeBaseClipIdRef.current = baseInfo.clip.id;
+            switchVideoSource(video, baseInfo.clip.url, baseInfo.localSeekTime, isPlaying);
+          } else if (!isPlaying && Math.abs(video.currentTime - baseInfo.localSeekTime) > 0.05) {
+            video.currentTime = baseInfo.localSeekTime;
+          }
+
+          try {
+            ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, canvas.width, canvas.height);
+          } catch (e) {
+            // ignore
+          }
+        } else {
+          activeBaseClipIdRef.current = null;
+          if (!video.paused) video.pause();
         }
 
-        const currSec = video.currentTime;
+        const currSec = timelineTime;
 
         // Render Multitrack Video Overlay Layers (trackIndex >= 1)
         const overlayClips = (videoClips || []).filter((c) => (c.trackIndex || 0) > 0);
@@ -140,11 +256,16 @@ export function VideoCanvas({
             overlayVideoRefs.current.set(overlay.id, vEl);
           }
 
+          // Sync overlay playback rate & volume if unmuted
+          vEl.playbackRate = video.playbackRate || 1.0;
+          vEl.volume = overlay.volume !== undefined ? overlay.volume : 0;
+          vEl.muted = (overlay.volume || 0) === 0;
+
           const effDur = Math.max(0.2, (overlay.duration || 10) - (overlay.trimStart || 0) - (overlay.trimEnd || 0));
           const overlayStart = overlay.startTime || 0;
           const overlayEnd = overlayStart + effDur;
 
-          const isActive = overlay.visible !== false && currentTime >= overlayStart && currentTime <= overlayEnd;
+          const isActive = overlay.visible !== false && currSec >= overlayStart && currSec <= overlayEnd;
 
           if (!isActive) {
             if (vEl && !vEl.paused) vEl.pause();
@@ -152,7 +273,7 @@ export function VideoCanvas({
           }
 
           if (vEl) {
-            const relTime = Math.max(0.05, (overlay.trimStart || 0) + (currentTime - overlayStart));
+            const relTime = Math.max(0.05, (overlay.trimStart || 0) + (currSec - overlayStart));
             vEl.playbackRate = video.playbackRate || 1.0;
 
             if (isPlaying) {
@@ -322,69 +443,15 @@ export function VideoCanvas({
           ctx.restore();
         });
 
-        if (videoClips && videoClips.length > 0) {
-          const activeInfo = getActiveClipForTime(currentTime, videoClips);
-          const track0Clips = videoClips
-            .filter((c) => (c.trackIndex || 0) === 0)
-            .sort((a, b) => (a.startTime || 0) - (b.startTime || 0));
-
-          if (activeInfo.clip) {
-            const localTime = video.currentTime;
-            const trimStart = activeInfo.clip?.trimStart || 0;
-            const trimEnd = activeInfo.clip?.trimEnd || 0;
-            const origDur = activeInfo.clip?.duration || 10;
-            const maxLocalTime = Math.max(0.1, origDur - trimEnd);
-
-            const effLocalTime = Math.max(0, localTime - trimStart);
-            const currentGlobalTime = activeInfo.accumulatedStart + effLocalTime;
-            setCurrentTime(currentGlobalTime);
-
-            if (isPlaying && (video.ended || localTime >= maxLocalTime - 0.08)) {
-              if (activeInfo.clipIndex >= 0 && activeInfo.clipIndex < track0Clips.length - 1) {
-                const nextClip = track0Clips[activeInfo.clipIndex + 1];
-                const nextGlobalTime = (nextClip.startTime || 0) + 0.01;
-                setCurrentTime(nextGlobalTime);
-                switchVideoSource(video, nextClip.url, nextClip.trimStart || 0, true);
-              } else {
-                // Reached end of Track 0 clips
-                if (currentGlobalTime >= duration - 0.15) {
-                  video.pause();
-                  setIsPlaying(false);
-                } else {
-                  // Gaps or overlays continue past Track 0 clips
-                  const nextGlobalTime = currentGlobalTime + 0.05;
-                  setCurrentTime(nextGlobalTime);
-                }
-              }
-            }
-          } else {
-            // In a gap between Track 0 clips or past Track 0 clips
-            if (isPlaying) {
-              const nextTime = currentTime + 1 / 30;
-              if (nextTime >= duration - 0.05) {
-                video.pause();
-                setIsPlaying(false);
-              } else {
-                setCurrentTime(nextTime);
-                const nextInfo = getActiveClipForTime(nextTime, videoClips);
-                if (nextInfo.clip) {
-                  switchVideoSource(video, nextInfo.clip.url, nextInfo.localSeekTime, true);
-                }
-              }
-            }
-          }
-        } else {
-          setCurrentTime(video.currentTime);
-        }
       }
 
       animId = requestAnimationFrame(renderFrame);
     };
 
-    renderFrame();
+    animId = requestAnimationFrame(renderFrame);
 
     return () => cancelAnimationFrame(animId);
-  }, [crop, textLayers, selectedTextId, selectedOverlayId, currentTime, videoClips, isPlaying]);
+  }, [crop, textLayers, selectedTextId, selectedOverlayId, videoClips, isPlaying, duration, playbackSpeed]);
 
   const [dragTarget, setDragTarget] = useState('text'); // 'text' | 'overlay'
 
@@ -859,50 +926,53 @@ export function VideoCanvas({
         onLoadedMetadata={handleNativeVideoMetadata}
         onDurationChange={handleNativeVideoMetadata}
         onCanPlay={handleNativeVideoMetadata}
-        onEnded={() => setIsPlaying(false)}
       />
 
       {/* Canvas Viewport */}
       <div className="canvas-viewport-wrapper" ref={containerRef}>
-        <div className="canvas-container">
+        <div className="canvas-container" style={{ transform: `scale(${canvasZoom})`, transformOrigin: 'center center', transition: touchCanvasDistRef.current ? 'none' : 'transform 0.1s ease-out' }}>
           <canvas
             ref={canvasRef}
             className="main-preview-canvas"
             onMouseDown={handleCanvasMouseDown}
-            onTouchStart={handleCanvasMouseDown}
+            onTouchStart={handleCanvasTouchStart}
+            onTouchMove={handleCanvasTouchMove}
+            onTouchEnd={handleCanvasTouchEnd}
             style={{ cursor: dragMode === 'resize' ? 'nwse-resize' : dragMode === 'move' ? 'move' : 'pointer' }}
           />
         </div>
       </div>
 
-      {/* Floating Center Controls */}
+      {/* Simplified Player Floating Controls */}
       <div className="player-controls-floating">
-        <button
-          className="btn btn-secondary btn-icon"
-          onClick={() => setVolume(volume > 0 ? 0 : 1)}
-          title="Tắt / Mở âm thanh"
-        >
-          {volume > 0 ? <Volume2 size={16} /> : <VolumeX size={16} />}
-        </button>
-
-        <span className="time-display-capcut">{formatTimecode(currentTime)}</span>
-
-        <button className="btn btn-secondary btn-icon" onClick={() => (videoRef.current.currentTime -= 1)}>
-          <SkipBack size={16} />
-        </button>
-
-        <button className="control-play-btn" onClick={togglePlay}>
+        {/* 1. Play/Pause Button */}
+        <button className="control-play-btn" onClick={togglePlay} title={isPlaying ? 'Tạm dừng' : 'Phát'}>
           {isPlaying ? <Pause size={20} /> : <Play size={20} style={{ marginLeft: '2px' }} />}
         </button>
 
-        <button className="btn btn-secondary btn-icon" onClick={() => (videoRef.current.currentTime += 1)}>
-          <SkipForward size={16} />
-        </button>
+        {/* 2. Slider progress bar with current/total time display */}
+        <div className="player-slider-container">
+          <input
+            type="range"
+            className="player-time-slider"
+            min="0"
+            max={duration || 10}
+            step="0.01"
+            value={Math.min(currentTime, duration || 10)}
+            onChange={(e) => {
+              const val = parseFloat(e.target.value);
+              if (onSeek) onSeek(val);
+              else setCurrentTime(val);
+            }}
+          />
+          <span className="time-display-capcut">
+            {formatTimecode(currentTime)} / {formatTimecode(duration)}
+          </span>
+        </div>
 
-        <span className="time-display-capcut">{formatTimecode(duration)}</span>
-
+        {/* 3. Fullscreen Button */}
         <button className="btn btn-secondary btn-icon" onClick={toggleFullscreen} title="Toàn màn hình">
-          <Maximize size={16} />
+          <Maximize size={18} />
         </button>
       </div>
     </div>
