@@ -48,8 +48,9 @@ export function getActiveClipForTime(globalTime, videoClips = []) {
     const effDur = getEffectiveClipDuration(clip);
     const endSec = startSec + effDur;
 
-    if (globalTime >= startSec && globalTime < endSec) {
-      const offsetInClip = Math.max(0, globalTime - startSec);
+    const isLast = i === track0Clips.length - 1;
+    if (globalTime >= startSec && (globalTime < endSec || (isLast && globalTime <= endSec + 0.1))) {
+      const offsetInClip = Math.max(0, Math.min(effDur, globalTime - startSec));
       const localSeekTime = (clip.trimStart || 0) + offsetInClip;
       return {
         clipIndex: i,
@@ -708,6 +709,7 @@ export function App() {
           width: Math.round((crop.width / 100) * (videoData?.width || 1280)),
           height: Math.round((crop.height / 100) * (videoData?.height || 720)),
         },
+        timelineDuration: duration,
         onProgress: (p) => setExportProgress(p),
       });
 
